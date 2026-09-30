@@ -88,7 +88,8 @@ impl Live {
     }
 
     pub fn delta(self: &Rc<Self>, content: &str, thinking: &str) {
-        if !thinking.is_empty() {
+        // An empty thought (just a newline) doesn't open a Thinking block.
+        if !thinking.is_empty() && (self.thinking.borrow().is_some() || !thinking.trim().is_empty()) {
             if self.thinking.borrow().is_none() {
                 let t = view::thinking("", "Thinking…", true);
                 self.body.append(&t.root);

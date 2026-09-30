@@ -239,7 +239,7 @@ pub async fn complete(conn: &Conn, model: &str, messages: Value) -> Result<Strin
         Err(e) => return Err(e),
     };
     let v: Value = r.json().await?;
-    Ok(v["message"]["content"].as_str().unwrap_or("").trim().to_string())
+    Ok(super::chat::strip_thinking(v["message"]["content"].as_str().unwrap_or("")).trim().to_string())
 }
 
 #[derive(Clone, Debug, Default)]

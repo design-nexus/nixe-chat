@@ -181,18 +181,22 @@ async fn stream_once(
     let mut thinking = String::new();
     let mut calls = Vec::new();
     let mut stats = Stats::default();
+    let mut split = ThinkSplitter::default();
+    let emit = |c: String, t: String, content: &mut String, thinking: &mut String| {
+        if !c.is_empty() || !t.is_empty() {
+            content.push_str(&c);
+            thinking.push_str(&t);
+            let _ = tx.try_send(Event::Delta { content: c, thinking: t });
+        }
+    };
     api::read_ndjson(response, |v| {
         if cancel.load(Ordering::Relaxed) {
             return false;
         }
         let m = &v["message"];
-        let c = m["content"].as_str().unwrap_or("");
-        let t = m["thinking"].as_str().unwrap_or("");
-        if !c.is_empty() || !t.is_empty() {
-            content.push_str(c);
-            thinking.push_str(t);
-            let _ = tx.try_send(Event::Delta { content: c.into(), thinking: t.into() });
-        }
+        let (c, t_inline) = split.push(m["content"].as_str().unwrap_or(""));
+        let t = format!("{}{t_inline}", m["thinking"].as_str().unwrap_or(""));
+        emit(c, t, &mut content, &mut thinking);
         calls.extend(parse_calls(m));
         if v["done"].as_bool().unwrap_or(false) {
             stats = parse_stats(&v);
@@ -200,7 +204,75 @@ async fn stream_once(
         true
     })
     .await?;
+    let (c, t) = split.finish();
+    emit(c, t, &mut content, &mut thinking);
     Ok((content, thinking, calls, stats))
+}
+
+/// Some models write their reasoning into the reply itself, between
+/// `<think>…</think>` or Gemma's `<|channel>thought…<channel|>`, when their
+/// template doesn't separate it. This moves that text to thinking as it streams.
+#[derive(Default)]
+struct ThinkSplitter {
+    inside: bool,
+    /// Text held back because it might be the start of a marker.
+    pending: String,
+}
+
+const OPENERS: [&str; 2] = ["<think>", "<|channel>thought"];
+const CLOSERS: [&str; 2] = ["</think>", "<channel|>"];
+
+impl ThinkSplitter {
+    /// Returns (content, thinking) that can be shown now.
+    fn push(&mut self, chunk: &str) -> (String, String) {
+        self.pending.push_str(chunk);
+        let (mut content, mut thinking) = (String::new(), String::new());
+        loop {
+            let markers: &[&str] = if self.inside { &CLOSERS } else { &OPENERS };
+            let found = markers.iter().filter_map(|m| self.pending.find(m).map(|i| (i, m.len()))).min();
+            let out = if self.inside { &mut thinking } else { &mut content };
+            match found {
+                Some((i, len)) => {
+                    out.push_str(&self.pending[..i]);
+                    self.pending.drain(..i + len);
+                    self.inside = !self.inside;
+                    if !self.inside {
+                        // The answer usually starts on a new line after the marker.
+                        let trimmed = self.pending.trim_start_matches('\n').to_string();
+                        self.pending = trimmed;
+                    }
+                }
+                None => {
+                    // Keep back a tail that could still grow into a marker.
+                    let keep = markers
+                        .iter()
+                        .flat_map(|m| (1..m.len()).rev().filter(move |k| m.is_char_boundary(*k)).map(move |k| &m[..k]))
+                        .filter(|p| self.pending.ends_with(p))
+                        .map(|p| p.len())
+                        .max()
+                        .unwrap_or(0);
+                    let cut = self.pending.len() - keep;
+                    out.push_str(&self.pending[..cut]);
+                    self.pending.drain(..cut);
+                    break;
+                }
+            }
+        }
+        (content, thinking)
+    }
+
+    fn finish(&mut self) -> (String, String) {
+        let rest = std::mem::take(&mut self.pending);
+        if self.inside { (String::new(), rest) } else { (rest, String::new()) }
+    }
+}
+
+/// A whole reply without any reasoning written inline.
+pub fn strip_thinking(text: &str) -> String {
+    let mut s = ThinkSplitter::default();
+    let (a, _) = s.push(text);
+    let (b, _) = s.finish();
+    a + &b
 }
 
 fn parse_calls(m: &Value) -> Vec<ToolCall> {
@@ -244,6 +316,28 @@ mod tests {
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0].arguments["query"], "rust");
         assert_eq!(calls[1].arguments["expression"], "2+2");
+    }
+
+    fn split_all(chunks: &[&str]) -> (String, String) {
+        let mut s = ThinkSplitter::default();
+        let (mut c, mut t) = (String::new(), String::new());
+        for ch in chunks {
+            let (a, b) = s.push(ch);
+            c.push_str(&a);
+            t.push_str(&b);
+        }
+        let (a, b) = s.finish();
+        (c + &a, t + &b)
+    }
+
+    #[test]
+    fn inline_thinking_is_moved_out() {
+        assert_eq!(split_all(&["<|channel>thought\n<channel|>Hello!"]), ("Hello!".into(), "\n".into()));
+        assert_eq!(split_all(&["<|chan", "nel>thought plan", "ning<chan", "nel|>\nHi"]), ("Hi".into(), " planning".into()));
+        assert_eq!(split_all(&["<think>a</think>b"]), ("b".into(), "a".into()));
+        assert_eq!(split_all(&["a < b and 2<3"]), ("a < b and 2<3".into(), String::new()));
+        assert_eq!(split_all(&["ends with <"]), ("ends with <".into(), String::new()));
+        assert_eq!(strip_thinking("<|channel>thought\nhmm<channel|>Greeting Exchange"), "Greeting Exchange");
     }
 
     #[test]

@@ -331,7 +331,9 @@ fn prepare(p: &Page, model: &str, user_id: i64) -> Prepared {
         .unwrap_or_else(|| pr.tools_enabled.clone());
     let location_on = pr.location_mode != "off";
     let tools_defs = if can("tools") { tools::definitions(&tool_names, location_on) } else { vec![] };
-    let wants_search = tool_names.iter().any(|t| t == "web_search");
+    // Models without tools can't decide when to search, so searching before
+    // every message happens only when the Web chip is on in this chat.
+    let wants_search = chat.params.tools.as_ref().is_some_and(|t| t.iter().any(|x| x == "web_search"));
     let question = path.last().map(|m| m.content.clone()).unwrap_or_default();
     let pre_search = (!can("tools") && wants_search && !question.trim().is_empty()).then(|| util::clip(&question, 200));
 

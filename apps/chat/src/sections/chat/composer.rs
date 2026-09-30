@@ -418,7 +418,12 @@ impl Composer {
         let info = models::info(&chat.model);
         let tools_ok = info.as_ref().is_none_or(|i| i.has("tools"));
         self.syncing.set(true);
-        self.web.set_active(enabled.iter().any(|t| t == "web_search"));
+        let web_on = if tools_ok {
+            enabled.iter().any(|t| t == "web_search")
+        } else {
+            chat.params.tools.as_ref().is_some_and(|t| t.iter().any(|x| x == "web_search"))
+        };
+        self.web.set_active(web_on);
         self.location.set_visible(pr.location_mode != "off" && tools_ok);
         self.location.set_active(enabled.iter().any(|t| t == "get_location"));
         let thinks = info.as_ref().is_some_and(|i| i.has("thinking"));
@@ -428,7 +433,7 @@ impl Composer {
         self.web.set_tooltip_text(Some(if tools_ok {
             "Search the web"
         } else {
-            "Search the web first and add the results (this model can't call tools itself)"
+            "Search the web before every message in this chat (this model can't decide when to search)"
         }));
         let kb = chat.knowledge.len();
         self.kb_btn.set_visible(!store::kbases().unwrap_or_default().is_empty());
@@ -742,7 +747,7 @@ fn tools_popover() -> gtk::Popover {
     let pr = prefs::get();
     if models::info(&chat.model).is_some_and(|i| !i.has("tools")) {
         let n = widgets::label(
-            &format!("{} can't call tools. Web search still works: results are added before it answers.", chat.model),
+            &format!("{} can't call tools. Turn on Web to search before every message instead.", chat.model),
             "dim",
         );
         n.set_wrap(true);
@@ -751,12 +756,18 @@ fn tools_popover() -> gtk::Popover {
     }
     let folder_tools = chat.folder.and_then(store::folder).map(|f| f.tools).filter(|t| !t.is_empty());
     let enabled = chat.params.tools.clone().or(folder_tools).unwrap_or_else(|| pr.tools_enabled.clone());
+    let tools_ok = models::info(&chat.model).is_none_or(|i| i.has("tools"));
     for t in tools::BUILTIN {
         if t.name == "get_location" && pr.location_mode == "off" {
             continue;
         }
         let c = gtk::CheckButton::with_label(t.title);
-        c.set_active(enabled.iter().any(|e| e == t.name));
+        let on = if !tools_ok && t.name == "web_search" {
+            chat.params.tools.as_ref().is_some_and(|l| l.iter().any(|x| x == "web_search"))
+        } else {
+            enabled.iter().any(|e| e == t.name)
+        };
+        c.set_active(on);
         c.set_tooltip_text(Some(t.description));
         let name = t.name;
         c.connect_toggled(move |c| {
