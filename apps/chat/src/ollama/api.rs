@@ -181,6 +181,15 @@ pub async fn copy(conn: &Conn, source: &str, destination: &str) -> Result<()> {
     Ok(())
 }
 
+/// `keep_alive` as Ollama wants it: bare numbers ("-1", "0") are seconds and
+/// must be sent as numbers; anything else ("5m", "1h") is a duration string.
+pub fn keep_alive_value(s: &str) -> Value {
+    match s.trim().parse::<i64>() {
+        Ok(n) => json!(n),
+        Err(_) => json!(s.trim()),
+    }
+}
+
 /// Drop a model from memory: an empty generate with `keep_alive: 0`.
 pub async fn unload(conn: &Conn, model: &str) -> Result<()> {
     check(conn.post("/api/generate").json(&json!({ "model": model, "keep_alive": 0 })).send().await?).await?;
@@ -189,7 +198,7 @@ pub async fn unload(conn: &Conn, model: &str) -> Result<()> {
 
 /// Load a model ahead of time so the first reply is quick.
 pub async fn preload(conn: &Conn, model: &str, keep_alive: &str) -> Result<()> {
-    check(conn.post("/api/generate").json(&json!({ "model": model, "keep_alive": keep_alive })).send().await?).await?;
+    check(conn.post("/api/generate").json(&json!({ "model": model, "keep_alive": keep_alive_value(keep_alive) })).send().await?).await?;
     Ok(())
 }
 
@@ -457,6 +466,13 @@ mod tests {
         assert!(!info.has("vision"));
         assert_eq!(info.context_length, Some(40960));
         assert_eq!(info.parameters, "temperature 0.6");
+    }
+
+    #[test]
+    fn keep_alive_numbers_are_numbers() {
+        assert_eq!(keep_alive_value("-1"), json!(-1));
+        assert_eq!(keep_alive_value("0"), json!(0));
+        assert_eq!(keep_alive_value("5m"), json!("5m"));
     }
 
     #[test]

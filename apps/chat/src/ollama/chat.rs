@@ -151,7 +151,7 @@ pub fn body(req: &Request) -> Value {
         "messages": req.messages.iter().map(Msg::to_json).collect::<Vec<_>>(),
         "stream": true,
         "options": req.options,
-        "keep_alive": req.keep_alive,
+        "keep_alive": api::keep_alive_value(&req.keep_alive),
     });
     if !req.tools.is_empty() {
         body["tools"] = json!(req.tools);
