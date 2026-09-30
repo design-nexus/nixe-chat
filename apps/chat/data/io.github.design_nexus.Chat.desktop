@@ -1,0 +1,29 @@
+[Desktop Entry]
+Type=Application
+Name=Chat
+GenericName=AI Chat
+Comment=Chat with local models through Ollama, with tools, web search and a model marketplace
+Exec=chat
+Icon=io.github.design_nexus.Chat
+Terminal=false
+StartupNotify=true
+StartupWMClass=io.github.design_nexus.Chat
+Categories=Utility;Development;GTK;
+Keywords=ollama;llm;ai;chat;model;assistant;huggingface;gguf;local;
+Actions=new;quick;models;marketplace;
+
+[Desktop Action new]
+Name=New Chat
+Exec=chat --new
+
+[Desktop Action quick]
+Name=Quick Ask
+Exec=chat --quick
+
+[Desktop Action models]
+Name=Models
+Exec=chat --section models
+
+[Desktop Action marketplace]
+Name=Marketplace
+Exec=chat --section marketplace

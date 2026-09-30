@@ -1,0 +1,575 @@
+//! Models: what's installed, what's loaded, what's downloading, and making
+//! new models from existing ones.
+
+use gtk::prelude::*;
+use gtk::{glib, pango};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::ollama::api::{self, Conn, Installed};
+use crate::pulls::{self, State};
+use crate::{hub, models, prefs, rt, util, widgets, window};
+
+/// A download's id and state, with the widgets updated in place.
+type DownloadRow = (u64, State, gtk::LevelBar, gtk::Label);
+
+pub fn build() -> gtk::Widget {
+    let page = widgets::page("Models", "What's installed on this server, what's loaded, and what's downloading.", &[]);
+
+    let banner = widgets::vbox(0);
+    page.body.append(&banner);
+
+    // ----- Download -----
+    let g = page.group("Download a model");
+    let entry = gtk::Entry::new();
+    entry.set_placeholder_text(Some("llama3.2, qwen3:8b, hf.co/user/repo:Q4_K_M"));
+    entry.add_css_class("mono");
+    entry.set_hexpand(true);
+    let go = gtk::Button::with_label("Download");
+    go.add_css_class("suggested-action");
+    let row = widgets::row(
+        "By name",
+        "Any model from <a href=\"https://ollama.com/library\">ollama.com/library</a>, or a GGUF on Hugging Face as <tt>hf.co/user/repo:quant</tt>.",
+        None,
+    );
+    row.add_css_class("tall");
+    row.set_orientation(gtk::Orientation::Vertical);
+    let line = widgets::hbox(8);
+    line.append(&entry);
+    line.append(&go);
+    row.append(&line);
+    g.add(&row);
+    let start = {
+        let entry = entry.clone();
+        move || {
+            let name = entry.text().trim().to_string();
+            if !name.is_empty() {
+                pulls::start(&name);
+                entry.set_text("");
+            }
+        }
+    };
+    let s2 = start.clone();
+    go.connect_clicked(move |_| s2());
+    entry.connect_activate(move |_| start());
+    let (create_row, _) = widgets::button_row(
+        "Create a model",
+        "Give an installed model a new name, system prompt and settings, such as a coding helper.",
+        "Create…",
+        |_| create_dialog(),
+    );
+    g.add(&create_row);
+
+    // ----- Downloads -----
+    let dl = page.group("Downloads");
+    let dl_list = widgets::vbox(6);
+    dl.add(&dl_list);
+    let dl_rows: Rc<RefCell<Vec<DownloadRow>>> = Rc::new(RefCell::new(Vec::new()));
+    let refresh_dl = {
+        let (dl, dl_list, dl_rows) = (dl.clone(), dl_list.clone(), dl_rows.clone());
+        move || {
+            let all = pulls::all();
+            dl.wrapper.set_visible(!all.is_empty());
+            let same = {
+                let rows = dl_rows.borrow();
+                rows.len() == all.len() && rows.iter().zip(&all).all(|(r, p)| r.0 == p.id && r.1 == p.state)
+            };
+            if same {
+                for ((_, _, bar, desc), p) in dl_rows.borrow().iter().zip(&all) {
+                    bar.set_value(p.fraction());
+                    desc.set_text(&pulls::describe(p));
+                }
+                return;
+            }
+            widgets::clear(&dl_list);
+            dl_rows.borrow_mut().clear();
+            for p in &all {
+                let bar = widgets::usage_bar();
+                bar.set_value(p.fraction());
+                let desc = widgets::label(&pulls::describe(p), "settings-option-description");
+                desc.add_css_class("mono");
+                desc.set_ellipsize(pango::EllipsizeMode::End);
+                let card = widgets::vbox(6);
+                card.add_css_class("settings-option");
+                card.add_css_class("tall");
+                let top = widgets::hbox(10);
+                let t = widgets::label(&p.name, "settings-option-title");
+                t.set_hexpand(true);
+                t.set_ellipsize(pango::EllipsizeMode::Middle);
+                top.append(&t);
+                let id = p.id;
+                if p.active() {
+                    let c = gtk::Button::with_label("Cancel");
+                    c.connect_clicked(move |_| pulls::cancel(id));
+                    top.append(&c);
+                } else {
+                    let tag = match &p.state {
+                        State::Done => widgets::tag("Done", "accent"),
+                        State::Failed(_) => widgets::tag("Failed", "danger"),
+                        _ => widgets::tag("Cancelled", ""),
+                    };
+                    top.append(&tag);
+                    if matches!(p.state, State::Failed(_) | State::Cancelled) {
+                        let name = p.name.clone();
+                        let retry = gtk::Button::with_label("Retry");
+                        retry.connect_clicked(move |_| pulls::start(&name));
+                        top.append(&retry);
+                    }
+                }
+                card.append(&top);
+                if p.active() {
+                    card.append(&bar);
+                }
+                card.append(&desc);
+                dl_list.append(&card);
+                dl_rows.borrow_mut().push((p.id, p.state.clone(), bar, desc));
+            }
+            if all.iter().any(|p| !p.active()) {
+                let clear = gtk::Button::with_label("Clear finished");
+                clear.add_css_class("flat");
+                clear.set_halign(gtk::Align::Start);
+                clear.connect_clicked(|_| pulls::clear_finished());
+                dl_list.append(&clear);
+            }
+        }
+    };
+    refresh_dl();
+    hub::on(&hub::PULLS, &dl_list, refresh_dl);
+
+    // ----- Running -----
+    let run = page.group("Loaded now");
+    let run_list = widgets::vbox(6);
+    run.add(&run_list);
+
+    // ----- Installed -----
+    let inst = page.group("Installed");
+    let inst_list = widgets::vbox(6);
+    inst.add(&inst_list);
+
+    let refresh = {
+        let (banner, run, run_list, inst, inst_list) =
+            (banner.clone(), run.clone(), run_list.clone(), inst.clone(), inst_list.clone());
+        move || {
+            widgets::clear(&banner);
+            if models::online() == Some(false) {
+                let b = widgets::banner(&format!("<b>Ollama isn't reachable.</b> {}", util::esc(&models::error())), true);
+                if crate::ollama::api::installed() {
+                    for action in ["start", "restart"] {
+                        let btn = gtk::Button::with_label(if action == "start" { "Start" } else { "Restart" });
+                        btn.set_valign(gtk::Align::Center);
+                        btn.connect_clicked(move |b| {
+                            b.set_sensitive(false);
+                            crate::cmd::background(
+                                move || api::control(action),
+                                |r| {
+                                    match r {
+                                        Ok(m) => window::toast(&m),
+                                        Err(e) => window::toast(&format!("{e:#}")),
+                                    }
+                                    models::refresh();
+                                },
+                            );
+                        });
+                        b.append(&btn);
+                    }
+                }
+                banner.append(&b);
+            }
+            fill_running(&run, &run_list);
+            fill_installed(&inst, &inst_list);
+        }
+    };
+    refresh();
+    hub::on(&hub::MODELS, &inst_list, refresh);
+
+    // While the page is on screen, keep "Loaded now" current.
+    let weak = run_list.downgrade();
+    glib::timeout_add_seconds_local(5, move || {
+        let Some(w) = weak.upgrade() else { return glib::ControlFlow::Break };
+        if w.is_mapped() {
+            models::refresh_running();
+        }
+        glib::ControlFlow::Continue
+    });
+    page.root.upcast()
+}
+
+fn fill_running(g: &widgets::Group, list: &gtk::Box) {
+    widgets::clear(list);
+    let running = models::running();
+    g.wrapper.set_visible(!running.is_empty());
+    for m in running {
+        let gpu = if m.size > 0 { (m.size_vram as f64 / m.size as f64 * 100.0).round() as u64 } else { 0 };
+        let place = match gpu {
+            100 => "all on the GPU".to_string(),
+            0 => "on the CPU".to_string(),
+            n => format!("{n}% on the GPU"),
+        };
+        let until = util::parse_time(&m.expires).map(|t| t - util::now()).filter(|s| *s > 0);
+        let desc = match until {
+            Some(s) if s < 86_400 * 365 => {
+                format!("{} · {place} · unloads in {}", util::size(m.size), crate::pulls::duration(s as u64))
+            }
+            _ => format!("{} · {place} · stays loaded", util::size(m.size)),
+        };
+        let name = m.name.clone();
+        let (row, _) = widgets::button_row(&m.name, &desc, "Unload", move |b| {
+            b.set_sensitive(false);
+            let (conn, n) = (Conn::current(), name.clone());
+            rt::spawn(async move { api::unload(&conn, &n).await }, |r| {
+                if let Err(e) = r {
+                    window::toast(&format!("{e:#}"));
+                }
+                models::refresh_running();
+            });
+        });
+        list.append(&row);
+    }
+}
+
+fn fill_installed(g: &widgets::Group, list: &gtk::Box) {
+    widgets::clear(list);
+    let installed = models::installed();
+    if models::online() != Some(true) {
+        g.wrapper.set_visible(false);
+        return;
+    }
+    g.wrapper.set_visible(true);
+    let total: u64 = installed.iter().map(|m| m.size).sum();
+    let updates = models::updates();
+    let summary = format!("{} model{} · {}", installed.len(), if installed.len() == 1 { "" } else { "s" }, util::size(total));
+    let head = widgets::hbox(8);
+    let sl = widgets::label(&summary, "dim");
+    sl.add_css_class("mono");
+    sl.set_hexpand(true);
+    head.append(&sl);
+    if !updates.is_empty() {
+        let all = gtk::Button::with_label(&format!("Update all ({})", updates.len()));
+        all.add_css_class("suggested-action");
+        let u2 = updates.clone();
+        all.connect_clicked(move |_| {
+            for m in &u2 {
+                pulls::start(m);
+            }
+        });
+        head.append(&all);
+    }
+    let check = gtk::Button::with_label("Check for updates");
+    check.connect_clicked(|b| {
+        b.set_sensitive(false);
+        b.set_label("Checking…");
+        let b2 = b.clone();
+        models::check_updates(move |n| {
+            b2.set_sensitive(true);
+            b2.set_label("Check for updates");
+            window::toast(&match n {
+                0 => "Every model is up to date".to_string(),
+                1 => "1 model can be updated".to_string(),
+                n => format!("{n} models can be updated"),
+            });
+        });
+    });
+    head.append(&check);
+    list.append(&head);
+
+    if installed.is_empty() {
+        let e = widgets::empty("Nothing installed yet. Download a model above, or browse the Marketplace.");
+        list.append(&e);
+        return;
+    }
+    let default = prefs::get().default_model;
+    for m in installed {
+        list.append(&model_row(&m, m.name == default));
+    }
+}
+
+fn model_row(m: &Installed, is_default: bool) -> gtk::Widget {
+    let info = models::info(&m.name);
+    let mut bits = vec![util::size(m.size)];
+    for s in [&m.parameter_size, &m.quantization, &m.family] {
+        if !s.is_empty() {
+            bits.push(s.clone());
+        }
+    }
+    if let Some(t) = util::parse_time(&m.modified) {
+        bits.push(format!("updated {}", util::ago(t)));
+    }
+    let row = widgets::row(&m.name, &util::esc(&bits.join(" · ")), None);
+    // Tags after the title.
+    if let Some(text) = row.first_child().and_downcast::<gtk::Box>() {
+        let title_row = widgets::hbox(6);
+        if let Some(t) = text.first_child() {
+            text.remove(&t);
+            title_row.append(&t);
+        }
+        if is_default {
+            title_row.append(&widgets::tag("Default", "accent"));
+        }
+        if models::has_update(&m.name) {
+            title_row.append(&widgets::tag("Update available", "accent"));
+        }
+        if let Some(i) = &info {
+            for (cap, label) in [("vision", "Vision"), ("tools", "Tools"), ("thinking", "Thinking"), ("embedding", "Embedding")] {
+                if i.has(cap) {
+                    title_row.append(&widgets::tag(label, ""));
+                }
+            }
+        }
+        text.prepend(&title_row);
+    }
+    let controls = widgets::hbox(6);
+    controls.set_valign(gtk::Align::Center);
+    if models::has_update(&m.name) {
+        let up = gtk::Button::with_label("Update");
+        let n = m.name.clone();
+        up.connect_clicked(move |_| pulls::start(&n));
+        controls.append(&up);
+    }
+    if info.as_ref().is_none_or(|i| !i.has("embedding") || i.has("completion")) {
+        let chat = gtk::Button::with_label("Chat");
+        let n = m.name.clone();
+        chat.connect_clicked(move |_| {
+            crate::sections::chat::new_chat(None);
+            if let Some(p) = crate::sections::chat::page() {
+                p.st.borrow_mut().chat_mut().model = n.clone();
+                crate::sections::chat::refresh_header(&p);
+                crate::sections::chat::refresh_banners(&p);
+            }
+        });
+        controls.append(&chat);
+    }
+    let menu = gtk::MenuButton::new();
+    menu.set_icon_name("view-more-symbolic");
+    menu.add_css_class("flat");
+    let m2 = m.clone();
+    menu.set_create_popup_func(move |mb| mb.set_popover(Some(&model_menu(&m2))));
+    controls.append(&menu);
+    row.append(&controls);
+    row.upcast()
+}
+
+fn menu_item(pop: &gtk::Popover, label: &str, f: impl Fn() + 'static) -> gtk::Button {
+    let b = gtk::Button::with_label(label);
+    b.add_css_class("flat");
+    b.add_css_class("menu-row");
+    if let Some(l) = b.child().and_downcast::<gtk::Label>() {
+        l.set_xalign(0.0);
+    }
+    let p = pop.clone();
+    b.connect_clicked(move |_| {
+        p.popdown();
+        f();
+    });
+    b
+}
+
+fn model_menu(m: &Installed) -> gtk::Popover {
+    let pop = gtk::Popover::new();
+    let v = widgets::vbox(1);
+    let name = m.name.clone();
+    v.append(&menu_item(&pop, "Details…", move || details(&name)));
+    let name = m.name.clone();
+    v.append(&menu_item(&pop, "Use for new chats", move || {
+        prefs::update(|p| p.default_model = name.clone());
+        hub::emit(&hub::MODELS);
+        window::toast(&format!("New chats start with {name}"));
+    }));
+    let name = m.name.clone();
+    v.append(&menu_item(&pop, "Load now", move || {
+        let (conn, n, ka) = (Conn::current(), name.clone(), prefs::get().keep_alive);
+        window::toast(&format!("Loading {n}…"));
+        rt::spawn(async move { api::preload(&conn, &n, &ka).await }, |r| {
+            if let Err(e) = r {
+                window::toast(&format!("{e:#}"));
+            }
+            models::refresh_running();
+        });
+    }));
+    let name = m.name.clone();
+    v.append(&menu_item(&pop, "Copy as…", move || {
+        let src = name.clone();
+        widgets::prompt_text(
+            "Copy model",
+            "The copy shares its files with the original, so it takes no extra space.",
+            &format!("{src}-copy"),
+            "Copy",
+            move |dst| {
+                let (conn, s, d) = (Conn::current(), src.clone(), dst.trim().to_string());
+                if d.is_empty() {
+                    return;
+                }
+                rt::spawn(async move { api::copy(&conn, &s, &d).await }, move |r| {
+                    match r {
+                        Ok(()) => window::toast("Copied"),
+                        Err(e) => window::toast(&format!("{e:#}")),
+                    }
+                    models::refresh();
+                });
+            },
+        );
+    }));
+    let name = m.name.clone();
+    v.append(&menu_item(&pop, "Download again", move || pulls::start(&name)));
+    let name = m.name.clone();
+    let p2 = pop.clone();
+    let del = widgets::two_click("Delete", "Click again to delete", move || {
+        p2.popdown();
+        let (conn, n) = (Conn::current(), name.clone());
+        rt::spawn(async move { api::delete(&conn, &n).await }, move |r| {
+            match r {
+                Ok(()) => window::toast("Model deleted"),
+                Err(e) => window::toast(&format!("{e:#}")),
+            }
+            models::refresh();
+        });
+    });
+    del.add_css_class("menu-row");
+    v.append(&del);
+    pop.set_child(Some(&v));
+    pop
+}
+
+fn details(name: &str) {
+    let (dialog, card) = widgets::dialog(name, 640);
+    let body = widgets::vbox(10);
+    let scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .min_content_height(420)
+        .max_content_height(620)
+        .propagate_natural_height(true)
+        .child(&body)
+        .build();
+    card.append(&scroll);
+    let sp = gtk::Spinner::new();
+    sp.start();
+    body.append(&sp);
+    let (conn, n) = (Conn::current(), name.to_string());
+    let b2 = body.clone();
+    rt::spawn(async move { api::show(&conn, &n).await }, move |r| {
+        widgets::clear(&b2);
+        let info = match r {
+            Ok(i) => i,
+            Err(e) => {
+                b2.append(&widgets::banner(&util::esc(&format!("{e:#}")), true));
+                return;
+            }
+        };
+        let tags = widgets::hbox(6);
+        for c in &info.capabilities {
+            tags.append(&widgets::tag(c, ""));
+        }
+        if let Some(ctx) = info.context_length {
+            tags.append(&widgets::tag(&format!("{} context", util::count(ctx)), "accent"));
+        }
+        b2.append(&tags);
+        for (title, text) in [
+            ("Parameters", &info.parameters),
+            ("System prompt", &info.system),
+            ("Template", &info.template),
+            ("Licence", &info.license),
+        ] {
+            if text.trim().is_empty() {
+                continue;
+            }
+            b2.append(&widgets::label(&title.to_uppercase(), "group-title"));
+            let l = widgets::label(&util::clip(text.trim(), 6000), "code-block");
+            l.set_wrap(true);
+            l.set_wrap_mode(pango::WrapMode::WordChar);
+            l.set_selectable(true);
+            b2.append(&l);
+        }
+    });
+    let close = gtk::Button::with_label("Close");
+    close.set_halign(gtk::Align::End);
+    let d = dialog.clone();
+    close.connect_clicked(move |_| d.close());
+    card.append(&close);
+    dialog.present();
+}
+
+fn create_dialog() {
+    let (dialog, card) = widgets::dialog("Create a model", 520);
+    let explain = widgets::label("Starts from a model you have. Nothing is downloaded or copied.", "dim");
+    explain.set_wrap(true);
+    card.append(&explain);
+    card.append(&widgets::label("Name", "field-label"));
+    let name = gtk::Entry::new();
+    name.set_placeholder_text(Some("my-helper"));
+    name.add_css_class("mono");
+    card.append(&name);
+    card.append(&widgets::label("Based on", "field-label"));
+    let bases = models::chat_models();
+    let opts: Vec<(String, String)> = bases.iter().map(|m| (m.clone(), util::model_label(m))).collect();
+    let base = widgets::dropdown(&opts, &models::default_model());
+    card.append(&base);
+    card.append(&widgets::label("System prompt", "field-label"));
+    let (sw, sys) = widgets::text_area("", false, 100);
+    card.append(&sw);
+    card.append(&widgets::label("Temperature", "field-label"));
+    let temp = gtk::SpinButton::with_range(0.0, 2.0, 0.05);
+    temp.set_value(0.7);
+    temp.set_digits(2);
+    card.append(&temp);
+    card.append(&widgets::label("Context length", "field-label"));
+    let ctx_opts = widgets::opts(&[
+        ("4096", "4K tokens"),
+        ("8192", "8K tokens"),
+        ("16384", "16K tokens"),
+        ("32768", "32K tokens"),
+        ("65536", "64K tokens"),
+    ]);
+    let ctx = widgets::dropdown(&ctx_opts, "8192");
+    card.append(&ctx);
+    let status = widgets::label("", "dim");
+    card.append(&status);
+    let buttons = widgets::hbox(8);
+    buttons.set_halign(gtk::Align::End);
+    let cancel = gtk::Button::with_label("Cancel");
+    let create = gtk::Button::with_label("Create");
+    create.add_css_class("suggested-action");
+    buttons.append(&cancel);
+    buttons.append(&create);
+    card.append(&buttons);
+    let d = dialog.clone();
+    cancel.connect_clicked(move |_| d.close());
+    let d = dialog.clone();
+    create.connect_clicked(move |b| {
+        let n = name.text().trim().to_string();
+        let Some(from) = bases.get(base.selected() as usize).cloned() else { return };
+        if n.is_empty() {
+            name.grab_focus();
+            return;
+        }
+        b.set_sensitive(false);
+        let mut params = serde_json::Map::new();
+        params.insert("temperature".into(), serde_json::json!(temp.value()));
+        let c: i64 = ctx_opts.get(ctx.selected() as usize).and_then(|o| o.0.parse().ok()).unwrap_or(8192);
+        params.insert("num_ctx".into(), serde_json::json!(c));
+        let system = widgets::buffer_text(&sys);
+        let conn = Conn::current();
+        let (d2, st2, b2) = (d.clone(), status.clone(), b.clone());
+        let (done_tx, done_rx) = async_channel::bounded::<Result<(), String>>(1);
+        let n2 = n.clone();
+        rt::stream(
+            move |tx| async move {
+                let r = api::create(&conn, &n2, &from, &system, params, tx).await.map_err(|e| format!("{e:#}"));
+                let _ = done_tx.send(r).await;
+            },
+            move |p: api::Progress| st2.set_text(&p.status),
+        );
+        glib::spawn_future_local(async move {
+            match done_rx.recv().await.unwrap_or(Err("stopped".into())) {
+                Ok(()) => {
+                    window::toast(&format!("Created {n}"));
+                    models::refresh();
+                    d2.close();
+                }
+                Err(e) => {
+                    window::toast(&e);
+                    b2.set_sensitive(true);
+                }
+            }
+        });
+    });
+    dialog.present();
+}

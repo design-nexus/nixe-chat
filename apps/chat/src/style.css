@@ -1,0 +1,1702 @@
+/* Chat — Nexus app style (see ~/Projects/STYLE.md). Every colour comes from the
+ * @theme_* tokens defined by the active palette (see theme.rs). */
+
+window.chat-window {
+  background: @theme_bg;
+  color: @theme_text;
+}
+
+window.chat-window,
+window.chat-window popover,
+window.chat-window dialog {
+  font-size: 1.0em;
+}
+
+.mono,
+.value-readout {
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-feature-settings: "tnum";
+}
+
+/* ---------- Sidebar ---------- */
+
+.settings-navigation {
+  background: @theme_surface;
+  min-width: 240px;
+  padding: 20px 15px 14px;
+  border-right: 1px solid alpha(@theme_border, 0.55);
+}
+
+.settings-navigation.compact {
+  min-width: 64px;
+  padding: 16px 8px;
+}
+
+.settings-navigation .menu-heading {
+  margin: 2px 10px 14px;
+  font-size: 0.875em;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: @theme_dim_text;
+}
+
+.settings-navigation .nav-group {
+  margin: 16px 10px 6px;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: alpha(@theme_dim_text, 0.85);
+}
+
+.settings-navigation button.nav-item {
+  min-height: 38px;
+  padding: 0 12px;
+  margin: 1px 0;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: alpha(@theme_text, 0.78);
+  transition: background 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+.settings-navigation button.nav-item image {
+  color: @theme_dim_text;
+}
+
+.settings-navigation button.nav-item:hover {
+  background: alpha(@theme_highlight, 0.55);
+  color: @theme_text;
+}
+
+.settings-navigation button.nav-item.active {
+  background: alpha(@theme_accent, 0.16);
+  color: @theme_text;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.42);
+}
+
+.settings-navigation button.nav-item.active image {
+  color: @theme_accent;
+}
+
+.settings-navigation button.nav-item .nav-label {
+  font-weight: 600;
+}
+
+.settings-navigation .nav-footer {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid alpha(@theme_border, 0.45);
+}
+
+/* ---------- Search ---------- */
+
+entry.settings-search,
+searchbar entry,
+entry.settings-search > text {
+  min-height: 34px;
+}
+
+entry.settings-search {
+  margin: 0 0 6px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: alpha(@theme_bg, 0.7);
+  border: 1px solid alpha(@theme_border, 0.7);
+  box-shadow: none;
+  color: @theme_text;
+  outline: none;
+}
+
+entry.settings-search:focus-within {
+  border-color: alpha(@theme_accent, 0.8);
+  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38);
+}
+
+entry.settings-search image {
+  color: @theme_dim_text;
+}
+
+/* ---------- Content ---------- */
+
+.settings-content {
+  background: @theme_bg;
+}
+
+.settings-page {
+  padding: 30px 36px 48px;
+}
+
+.settings-page.narrow {
+  padding: 22px 18px 40px;
+}
+
+.section-header {
+  margin-bottom: 8px;
+}
+
+.section-title {
+  font-size: 1.62em;
+  font-weight: 800;
+  color: @theme_text;
+}
+
+.section-description {
+  margin-top: 2px;
+  color: @theme_dim_text;
+}
+
+.group-title {
+  margin: 24px 2px 8px;
+  font-size: 0.76em;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: @theme_dim_text;
+}
+
+.group-note {
+  margin: -2px 2px 10px;
+  font-size: 0.88em;
+  color: @theme_dim_text;
+}
+
+.settings-group {
+  /* the rows provide the chrome */
+}
+
+.settings-option {
+  background: mix(@theme_bg, @theme_muted, 0.25);
+  border: 1px solid alpha(@theme_border, 0.55);
+  border-radius: 6px;
+  min-height: 60px;
+  padding: 10px 14px;
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out, background 150ms ease-out;
+}
+
+.settings-option:hover {
+  border-color: alpha(@theme_border, 0.95);
+}
+
+.settings-option.search-hit {
+  border-color: alpha(@theme_accent, 0.72);
+  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38), 0 0 14px alpha(@theme_glow, 0.24);
+}
+
+.settings-option.tall {
+  padding: 14px 16px;
+}
+
+.settings-option-title {
+  color: @theme_text;
+  font-weight: 700;
+}
+
+.settings-option-description {
+  color: @theme_dim_text;
+  font-size: 0.88em;
+}
+
+.settings-option-description link {
+  color: @theme_accent;
+}
+
+.settings-option .managed-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 999px;
+  background: @theme_accent;
+  margin-right: 2px;
+}
+
+.value-readout {
+  color: @theme_text;
+  min-width: 64px;
+}
+
+.dim {
+  color: @theme_dim_text;
+}
+
+.danger-text {
+  color: @theme_danger;
+}
+
+.accent-text {
+  color: @theme_accent;
+}
+
+/* ---------- Buttons ---------- */
+
+window.chat-window button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: alpha(@theme_muted, 0.32);
+  border: 1px solid alpha(@theme_border, 0.8);
+  box-shadow: none;
+  color: @theme_text;
+  transition: background 150ms ease-out, border-color 150ms ease-out;
+}
+
+window.chat-window button:hover {
+  background: alpha(@theme_muted, 0.55);
+  border-color: alpha(@theme_accent, 0.55);
+}
+
+window.chat-window button:active {
+  background: alpha(@theme_accent, 0.22);
+}
+
+window.chat-window button:disabled {
+  opacity: 0.45;
+}
+
+window.chat-window button.suggested-action {
+  background: @theme_accent;
+  border-color: @theme_accent;
+  color: @theme_on_accent;
+  font-weight: 700;
+}
+
+window.chat-window button.suggested-action:hover {
+  background: mix(@theme_accent, @theme_text, 0.12);
+}
+
+window.chat-window button.destructive-action {
+  background: alpha(@theme_danger, 0.12);
+  border-color: alpha(@theme_danger, 0.55);
+  color: @theme_danger;
+}
+
+window.chat-window button.flat {
+  background: transparent;
+  border-color: transparent;
+}
+
+window.chat-window button.flat:hover {
+  background: alpha(@theme_highlight, 0.55);
+}
+
+window.chat-window menubutton.flat > button {
+  background: transparent;
+  border-color: transparent;
+}
+
+window.chat-window menubutton.flat > button:hover,
+window.chat-window menubutton.flat > button:checked {
+  background: alpha(@theme_highlight, 0.55);
+}
+
+window.chat-window button.reset-button {
+  min-height: 26px;
+  min-width: 26px;
+  padding: 0;
+  border-radius: 999px;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.open-config {
+  min-height: 34px;
+  padding: 0 14px;
+  font-weight: 600;
+}
+
+window.chat-window button.open-config image {
+  color: @theme_accent;
+}
+
+window.chat-window button.chip {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.9em;
+}
+
+window.chat-window button.chip.selected {
+  background: alpha(@theme_accent, 0.2);
+  border-color: alpha(@theme_accent, 0.8);
+  color: @theme_text;
+}
+
+/* ---------- Inputs ---------- */
+
+window.chat-window entry,
+window.chat-window spinbutton {
+  min-height: 32px;
+  border-radius: 5px;
+  background: alpha(@theme_bg, 0.65);
+  border: 1px solid alpha(@theme_border, 0.8);
+  box-shadow: none;
+  color: @theme_text;
+}
+
+window.chat-window entry:focus-within,
+window.chat-window spinbutton:focus-within {
+  border-color: @theme_accent;
+  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38);
+}
+
+window.chat-window dropdown > button {
+  min-width: 160px;
+}
+
+window.chat-window popover > contents {
+  background: @theme_surface;
+  border: 1px solid alpha(@theme_border, 0.7);
+  border-radius: 9px;
+  box-shadow: 0 4px 16px alpha(@theme_shadow, 0.5);
+  color: @theme_text;
+  padding: 4px;
+}
+
+window.chat-window popover listview > row,
+window.chat-window popover list > row {
+  border-radius: 5px;
+  padding: 6px 10px;
+  color: @theme_text;
+}
+
+window.chat-window popover listview > row:hover,
+window.chat-window popover list > row:hover,
+window.chat-window popover listview > row:selected {
+  background: alpha(@theme_accent, 0.18);
+}
+
+window.chat-window switch {
+  min-width: 40px;
+  min-height: 22px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.85);
+  border: 1px solid alpha(@theme_border, 0.9);
+  box-shadow: none;
+}
+
+window.chat-window switch:checked {
+  background: @theme_accent;
+  border-color: @theme_accent;
+}
+
+window.chat-window switch > slider {
+  min-width: 18px;
+  min-height: 18px;
+  margin: 1px;
+  border-radius: 999px;
+  background: @theme_text;
+  border: none;
+  box-shadow: 0 1px 3px alpha(@theme_shadow, 0.5);
+}
+
+window.chat-window switch:checked > slider {
+  background: @theme_on_accent;
+}
+
+window.chat-window scale {
+  padding: 8px 4px;
+}
+
+window.chat-window scale > trough {
+  min-height: 4px;
+  min-width: 4px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.8);
+  border: none;
+}
+
+window.chat-window scale > trough > highlight {
+  border-radius: 999px;
+  background: @theme_accent;
+}
+
+window.chat-window scale > trough > slider,
+window.chat-window scale.marks-before > trough > slider,
+window.chat-window scale.marks-after > trough > slider {
+  -gtk-icon-source: none;
+  background-image: none;
+  min-width: 16px;
+  min-height: 16px;
+  margin: -7px;
+  border-radius: 999px;
+  background: @theme_text;
+  border: 2px solid @theme_accent;
+  box-shadow: 0 0 10px alpha(@theme_glow, 0.35);
+}
+
+window.chat-window scale:disabled {
+  opacity: 0.5;
+}
+
+window.chat-window scale marks {
+  color: alpha(@theme_dim_text, 0.7);
+}
+
+window.chat-window scrollbar {
+  background: transparent;
+}
+
+window.chat-window scrollbar slider {
+  min-width: 6px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.9);
+}
+
+/* ---------- Cards (themes, gestures) ---------- */
+
+/* ---------- Theme swatches ---------- */
+
+.theme-card {
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid alpha(@theme_border, 0.6);
+  background: mix(@theme_bg, @theme_muted, 0.2);
+}
+
+.theme-card:hover {
+  border-color: alpha(@theme_accent, 0.6);
+}
+
+.theme-card.selected {
+  border-color: @theme_accent;
+  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.72), 0 0 14px alpha(@theme_glow, 0.24);
+}
+
+.theme-card picture {
+  border-radius: 7px 7px 0 0;
+}
+
+.theme-card .theme-card-name {
+  padding: 8px 10px;
+  font-weight: 600;
+}
+
+.swatch {
+  min-width: 16px;
+  min-height: 16px;
+  border-radius: 4px;
+  border: 1px solid alpha(@theme_shadow, 0.4);
+}
+
+/* ---------- Banners and dialogs ---------- */
+
+.banner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: alpha(@theme_accent, 0.12);
+  border: 1px solid alpha(@theme_accent, 0.45);
+  margin-bottom: 14px;
+}
+
+.banner.warning {
+  background: alpha(@theme_danger, 0.1);
+  border-color: alpha(@theme_danger, 0.45);
+}
+
+.toast {
+  margin: 18px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: @theme_surface;
+  border: 1px solid alpha(@theme_border, 0.8);
+  box-shadow: 0 4px 16px alpha(@theme_shadow, 0.5), 0 0 14px alpha(@theme_glow, 0.14);
+}
+
+.dialog-card {
+  background: @theme_bg;
+  border: 1px solid alpha(@theme_border, 0.65);
+  border-radius: 14px;
+  box-shadow: 0 0 28px alpha(@theme_glow, 0.08);
+  padding: 24px;
+}
+
+.code-block {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.86em;
+  background: alpha(@theme_shadow, 0.35);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: @theme_text;
+}
+
+textview.code-block > text {
+  background: transparent;
+  color: @theme_text;
+}
+
+.key-cap {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.85em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: alpha(@theme_muted, 0.55);
+  border: 1px solid alpha(@theme_border, 0.9);
+}
+
+/* ---------- Sidebar readouts and footer ---------- */
+
+.settings-navigation .nav-readout {
+  font-size: 0.78em;
+  color: @theme_dim_text;
+}
+
+.settings-navigation button.nav-item.active .nav-readout {
+  color: @theme_text;
+}
+
+window.chat-window button.live-pill {
+  min-height: 24px;
+  padding: 0 10px;
+  font-size: 0.8em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.live-pill.paused {
+  background: alpha(@theme_danger, 0.12);
+  border-color: alpha(@theme_danger, 0.55);
+  color: @theme_danger;
+}
+
+/* ---------- Stat tiles ---------- */
+
+window.chat-window button.stat-tile {
+  padding: 12px 14px 10px;
+  border-radius: 8px;
+  background: mix(@theme_bg, @theme_muted, 0.25);
+  border: 1px solid alpha(@theme_border, 0.55);
+  min-width: 150px;
+}
+
+window.chat-window button.stat-tile:hover {
+  background: mix(@theme_bg, @theme_muted, 0.32);
+  border-color: alpha(@theme_accent, 0.55);
+}
+
+.stat-title {
+  font-size: 0.76em;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: @theme_dim_text;
+}
+
+.stat-value {
+  font-size: 1.5em;
+  font-weight: 800;
+  color: @theme_text;
+}
+
+.stat-sub {
+  font-size: 0.82em;
+  color: @theme_dim_text;
+}
+
+/* ---------- Graphs ---------- */
+
+.graph-card {
+  background: mix(@theme_bg, @theme_muted, 0.25);
+  border: 1px solid alpha(@theme_border, 0.55);
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.graph-card-title {
+  font-weight: 700;
+  color: @theme_text;
+}
+
+.graph-legend {
+  font-size: 0.86em;
+}
+
+.legend-label {
+  color: @theme_dim_text;
+}
+
+.legend-value {
+  color: @theme_text;
+  font-weight: 700;
+}
+
+.legend-swatch {
+  min-width: 16px;
+  min-height: 3px;
+  border-radius: 2px;
+}
+
+.legend-swatch.tone-accent { background: @theme_accent; }
+.legend-swatch.tone-second { background: mix(@theme_accent, @theme_danger, 0.55); }
+
+.legend-swatch.dashed {
+  min-height: 0;
+  background: none;
+  border-top: 2px dashed mix(@theme_accent, @theme_danger, 0.55);
+}
+
+.graph-plot {
+  background: alpha(@theme_bg, 0.35);
+  border-radius: 4px;
+}
+
+.graph-axis {
+  font-size: 0.72em;
+  color: @theme_dim_text;
+}
+
+.graph-plot .graph-axis {
+  margin: 3px 6px;
+  color: alpha(@theme_dim_text, 0.9);
+}
+
+.graph-tip {
+  font-size: 0.8em;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: @theme_surface;
+  border: 1px solid alpha(@theme_border, 0.8);
+  box-shadow: 0 4px 16px alpha(@theme_shadow, 0.5);
+  color: @theme_text;
+}
+
+.core-cell {
+  background: mix(@theme_bg, @theme_surface, 0.5);
+  border: 1px solid alpha(@theme_border, 0.45);
+  border-radius: 6px;
+  padding: 6px 8px 4px;
+  min-width: 96px;
+}
+
+.core-cell .core-name {
+  font-size: 0.74em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+.core-cell .core-value {
+  font-size: 0.8em;
+  color: @theme_text;
+}
+
+/* ---------- Key figures ---------- */
+
+.kv-key {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+.kv-value {
+  font-size: 1.05em;
+  font-weight: 700;
+  color: @theme_text;
+}
+
+/* ---------- Usage bars ---------- */
+
+window.chat-window levelbar > trough {
+  min-height: 6px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.8);
+  border: none;
+  padding: 0;
+}
+
+window.chat-window levelbar > trough > block {
+  min-height: 6px;
+  border-radius: 999px;
+  border: none;
+}
+
+window.chat-window levelbar > trough > block.filled {
+  background: @theme_accent;
+}
+
+window.chat-window levelbar > trough > block.filled.hot {
+  background: @theme_danger;
+}
+
+window.chat-window levelbar > trough > block.empty {
+  background: transparent;
+}
+
+/* Memory composition bar: used / cached / free. */
+.composition {
+  min-height: 10px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.8);
+}
+
+.legend-key {
+  min-width: 10px;
+  min-height: 10px;
+  border-radius: 3px;
+  background: alpha(@theme_muted, 0.8);
+}
+
+.legend-key.part-used { background: @theme_accent; }
+.legend-key.part-cached { background: alpha(@theme_accent, 0.4); }
+
+.composition .part-used { background: @theme_accent; border-radius: 999px 0 0 999px; }
+.composition .part-cached { background: alpha(@theme_accent, 0.4); }
+
+/* ---------- Tags ---------- */
+
+.tag {
+  font-size: 0.72em;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.55);
+  color: @theme_dim_text;
+}
+
+.tag.accent {
+  background: alpha(@theme_accent, 0.18);
+  color: @theme_text;
+}
+
+.tag.danger {
+  background: alpha(@theme_danger, 0.14);
+  color: @theme_danger;
+}
+
+/* ---------- Tables (processes, services) ---------- */
+
+.settings-page.fill {
+  padding-bottom: 22px;
+}
+
+.toolbar {
+  margin: 14px 0 10px;
+}
+
+.table-card {
+  background: mix(@theme_bg, @theme_muted, 0.18);
+  border: 1px solid alpha(@theme_border, 0.55);
+  border-radius: 6px;
+}
+
+window.chat-window columnview {
+  background: transparent;
+  color: @theme_text;
+}
+
+window.chat-window columnview > header {
+  background: transparent;
+  border-bottom: 1px solid alpha(@theme_border, 0.55);
+}
+
+window.chat-window columnview > header > button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+window.chat-window columnview > header > button,
+window.chat-window columnview > header > button > box > label {
+  font-size: 1em;
+  font-weight: 700;
+}
+
+window.chat-window columnview > header > button:hover {
+  background: alpha(@theme_highlight, 0.4);
+  color: @theme_text;
+}
+
+window.chat-window columnview > header > button sort-indicator {
+  color: @theme_accent;
+}
+
+window.chat-window columnview > listview {
+  background: transparent;
+}
+
+window.chat-window columnview > listview > row {
+  border-radius: 5px;
+  margin: 0 4px;
+  transition: background 150ms ease-out;
+}
+
+window.chat-window columnview > listview > row:hover {
+  background: alpha(@theme_highlight, 0.55);
+}
+
+window.chat-window columnview > listview > row:selected {
+  background: alpha(@theme_accent, 0.16);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.42);
+  color: @theme_text;
+}
+
+window.chat-window columnview > listview > row > cell {
+  padding: 5px 10px;
+}
+
+.cell-num {
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-feature-settings: "tnum";
+  font-size: 0.92em;
+}
+
+.cell-hot {
+  color: @theme_accent;
+  font-weight: 700;
+}
+
+.cell-dim {
+  color: @theme_dim_text;
+}
+
+.tree-expander {
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin: 0;
+}
+
+window.chat-window button.tree-expander {
+  min-height: 18px;
+  min-width: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.tree-expander:hover {
+  background: alpha(@theme_highlight, 0.55);
+}
+
+.details-panel {
+  margin-top: 10px;
+  background: mix(@theme_bg, @theme_muted, 0.25);
+  border: 1px solid alpha(@theme_border, 0.55);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+
+.details-title {
+  font-size: 1.1em;
+  font-weight: 800;
+}
+
+.empty-state {
+  padding: 40px;
+  color: @theme_dim_text;
+}
+
+window.chat-window list.service-list,
+window.chat-window list.table-card {
+  background: transparent;
+  color: @theme_text;
+}
+
+window.chat-window list.service-list > row {
+  padding: 0 0 6px;
+  background: transparent;
+}
+
+window.chat-window list.table-card > row {
+  border-radius: 5px;
+  margin: 2px 4px;
+}
+
+window.chat-window list.table-card > row:hover {
+  background: alpha(@theme_highlight, 0.55);
+}
+
+window.chat-window list.table-card > row:selected {
+  background: alpha(@theme_accent, 0.16);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.42);
+}
+
+/* =====================================================================
+ * Chat
+ * ===================================================================== */
+
+.small-text {
+  font-size: 0.82em;
+}
+
+.field-label {
+  margin-top: 4px;
+  font-size: 0.82em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.tiny {
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0 4px;
+  border-radius: 6px;
+}
+
+window.chat-window button.small {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 0.85em;
+}
+
+window.chat-window button.chip:checked,
+window.chat-window togglebutton.chip:checked,
+window.chat-window button.chip.selected {
+  background: alpha(@theme_accent, 0.2);
+  border-color: alpha(@theme_accent, 0.8);
+  color: @theme_text;
+}
+
+window.chat-window button.chip:checked image,
+window.chat-window button.chip.selected image {
+  color: @theme_accent;
+}
+
+/* Segmented control */
+.segmented {
+  background: alpha(@theme_muted, 0.32);
+  border: 1px solid alpha(@theme_border, 0.8);
+  border-radius: 7px;
+  padding: 2px;
+}
+
+window.chat-window .segmented > button {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  color: alpha(@theme_text, 0.78);
+}
+
+window.chat-window .segmented > button:hover {
+  background: alpha(@theme_highlight, 0.55);
+}
+
+window.chat-window .segmented > button.selected {
+  background: @theme_accent;
+  color: @theme_on_accent;
+}
+
+/* Text areas */
+.text-area-frame {
+  border-radius: 5px;
+  background: alpha(@theme_bg, 0.65);
+  border: 1px solid alpha(@theme_border, 0.8);
+}
+
+.text-area-frame:focus-within {
+  border-color: @theme_accent;
+  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38);
+}
+
+textview.text-area,
+textview.text-area > text {
+  background: transparent;
+  color: @theme_text;
+}
+
+/* Menus */
+window.chat-window popover.menu > contents {
+  padding: 4px;
+}
+
+window.chat-window button.menu-row {
+  min-height: 32px;
+  border-radius: 5px;
+  font-weight: 500;
+}
+
+window.chat-window button.menu-row:hover {
+  background: alpha(@theme_accent, 0.18);
+}
+
+.menu-heading-small {
+  margin: 8px 10px 4px;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: alpha(@theme_dim_text, 0.85);
+}
+
+.popover-body {
+  padding: 8px;
+}
+
+/* ---------- Sidebar: chat list and footer ---------- */
+
+window.chat-window button.new-chat {
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  margin: 0 2px 12px 0;
+}
+
+window.chat-window button.new-chat image {
+  color: @theme_accent;
+}
+
+.chat-list-head {
+  margin: 14px 0 2px;
+}
+
+.chat-list-head .nav-group {
+  margin: 0 10px;
+}
+
+.chat-date-group {
+  margin: 12px 10px 4px;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: alpha(@theme_dim_text, 0.85);
+}
+
+.chat-list-empty {
+  margin: 8px 10px;
+  font-size: 0.9em;
+}
+
+window.chat-window button.chat-item {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: alpha(@theme_text, 0.78);
+}
+
+window.chat-window button.chat-item:hover {
+  background: alpha(@theme_highlight, 0.55);
+  color: @theme_text;
+}
+
+window.chat-window button.chat-item.active {
+  background: alpha(@theme_accent, 0.16);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.42);
+  color: @theme_text;
+}
+
+window.chat-window .chat-row.in-folder button.chat-item {
+  padding-left: 30px;
+}
+
+window.chat-window button.chat-item.folder-item {
+  font-weight: 600;
+}
+
+window.chat-window button.chat-item.folder-item image {
+  color: @theme_dim_text;
+}
+
+window.chat-window button.chat-item.search-result {
+  padding: 6px 10px;
+}
+
+.chat-title {
+  font-weight: 500;
+}
+
+.chat-snippet {
+  font-size: 0.82em;
+  color: @theme_dim_text;
+}
+
+window.chat-window menubutton.row-menu > button {
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+window.chat-window menubutton.row-menu {
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+  margin-right: 2px;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+window.chat-window .chat-row:hover menubutton.row-menu,
+window.chat-window menubutton.row-menu:active {
+  opacity: 1;
+}
+
+window.chat-window button.archive-toggle {
+  margin-top: 10px;
+  font-size: 0.86em;
+  color: @theme_dim_text;
+}
+
+.status-dot {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.9);
+}
+
+.status-dot.on {
+  background: @theme_accent;
+  box-shadow: 0 0 6px alpha(@theme_glow, 0.5);
+}
+
+.status-dot.off {
+  background: @theme_danger;
+}
+
+window.chat-window dropdown.host-switcher > button {
+  min-width: 0;
+}
+
+/* ---------- Chat page ---------- */
+
+.chat-header {
+  padding: 12px 20px 10px;
+  border-bottom: 1px solid alpha(@theme_border, 0.45);
+}
+
+window.chat-window button.chat-title-btn {
+  padding: 0 8px;
+  min-height: 34px;
+}
+
+.chat-page-title {
+  font-size: 1.15em;
+  font-weight: 800;
+}
+
+window.chat-window dropdown.model-picker > button {
+  min-width: 180px;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-size: 0.9em;
+}
+
+.chat-banners .banner {
+  margin: 10px 20px 0;
+}
+
+.messages-wrap {
+  padding: 0 24px;
+}
+
+.messages {
+  padding: 24px 0 32px;
+}
+
+.composer-clamp {
+  margin: 0 24px;
+}
+
+.chat-empty {
+  padding: 40px 20px;
+}
+
+.chat-empty-title {
+  font-size: 1.62em;
+  font-weight: 800;
+}
+
+.prompt-chips {
+  margin-top: 12px;
+}
+
+window.chat-window button.jump-bottom {
+  margin-bottom: 14px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  background: @theme_surface;
+  box-shadow: 0 4px 16px alpha(@theme_shadow, 0.5);
+}
+
+/* User messages */
+.user-msg {
+  padding: 10px 14px;
+  border-radius: 14px 14px 4px 14px;
+  background: mix(@theme_bg, @theme_muted, 0.45);
+  border: 1px solid alpha(@theme_border, 0.55);
+}
+
+.user-msg.editing {
+  border-color: alpha(@theme_accent, 0.72);
+}
+
+.user-text {
+  color: @theme_text;
+}
+
+.file-chip {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: alpha(@theme_bg, 0.6);
+  font-size: 0.86em;
+}
+
+.thumb {
+  border-radius: 8px;
+}
+
+window.chat-window button.thumb-btn {
+  padding: 0;
+  min-height: 0;
+  border: none;
+  background: transparent;
+}
+
+.msg-actions {
+  opacity: 0.35;
+  transition: opacity 150ms ease-out;
+}
+
+.user-turn:hover .msg-actions,
+.assistant-msg:hover .msg-actions {
+  opacity: 1;
+}
+
+.branch-nav label {
+  margin: 0 2px;
+}
+
+/* Assistant messages */
+.assistant-msg {
+  padding: 2px 0;
+}
+
+.compare-row > .assistant-msg,
+.live-box > .assistant-msg {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid alpha(@theme_border, 0.55);
+  background: mix(@theme_bg, @theme_muted, 0.12);
+}
+
+.live-box > .assistant-msg:only-child {
+  padding: 2px 0;
+  border: none;
+  background: none;
+}
+
+.compare-row > .assistant-msg.selected {
+  border-color: alpha(@theme_accent, 0.72);
+  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38), 0 0 14px alpha(@theme_glow, 0.24);
+}
+
+.model-name {
+  font-size: 0.82em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+.msg-stats {
+  font-size: 0.78em;
+  color: alpha(@theme_dim_text, 0.85);
+}
+
+.sources {
+  margin-top: 2px;
+}
+
+window.chat-window button.source-chip {
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.82em;
+  background: alpha(@theme_muted, 0.32);
+  border: 1px solid alpha(@theme_border, 0.8);
+}
+
+window.chat-window button.source-chip label {
+  color: @theme_text;
+  text-decoration-line: none;
+}
+
+/* Thinking */
+.thinking {
+  border-left: 2px solid alpha(@theme_accent, 0.45);
+  padding-left: 10px;
+}
+
+window.chat-window button.disclosure {
+  min-height: 28px;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.disclosure:hover {
+  background: alpha(@theme_highlight, 0.55);
+}
+
+.thinking-title {
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.thinking-body {
+  margin: 4px 6px 6px;
+  font-size: 0.9em;
+  color: @theme_dim_text;
+}
+
+/* Tool calls */
+.tool-card {
+  border-radius: 6px;
+  border: 1px solid alpha(@theme_border, 0.55);
+  background: mix(@theme_bg, @theme_muted, 0.25);
+}
+
+.tool-card.failed {
+  border-color: alpha(@theme_danger, 0.45);
+}
+
+window.chat-window button.tool-head {
+  min-height: 34px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+}
+
+window.chat-window button.tool-head image {
+  color: @theme_accent;
+}
+
+.tool-title {
+  font-weight: 700;
+}
+
+.tool-summary {
+  color: @theme_dim_text;
+  font-size: 0.9em;
+}
+
+.tool-body {
+  padding: 4px 12px 12px;
+}
+
+.tool-result {
+  font-size: 0.84em;
+  color: @theme_dim_text;
+}
+
+.approval {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: alpha(@theme_accent, 0.12);
+  border: 1px solid alpha(@theme_accent, 0.45);
+}
+
+.approval-title {
+  font-weight: 700;
+}
+
+/* ---------- Markdown ---------- */
+
+.markdown label {
+  color: @theme_text;
+}
+
+.markdown label link,
+.markdown label > link {
+  color: @theme_accent;
+}
+
+.md-p {
+  line-height: 1.45;
+}
+
+.md-h1 { font-size: 1.45em; font-weight: 800; margin-top: 6px; }
+.md-h2 { font-size: 1.25em; font-weight: 800; margin-top: 6px; }
+.md-h3 { font-size: 1.1em; font-weight: 700; margin-top: 4px; }
+.md-h4 { font-weight: 700; }
+
+.md-marker {
+  min-width: 16px;
+  color: @theme_dim_text;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-feature-settings: "tnum";
+}
+
+.md-quote {
+  padding-left: 12px;
+  border-left: 3px solid alpha(@theme_accent, 0.55);
+}
+
+.md-quote label {
+  color: @theme_dim_text;
+}
+
+.md-code {
+  border-radius: 8px;
+  background: alpha(@theme_shadow, 0.35);
+  border: 1px solid alpha(@theme_border, 0.45);
+}
+
+.md-code-head {
+  padding: 2px 6px 2px 12px;
+  border-bottom: 1px solid alpha(@theme_border, 0.35);
+  font-size: 0.82em;
+}
+
+.md-code-body {
+  padding: 10px 14px;
+  font-size: 0.88em;
+}
+
+.md-table {
+  border: 1px solid alpha(@theme_border, 0.55);
+  border-radius: 6px;
+}
+
+.md-cell {
+  padding: 6px 10px;
+  border-bottom: 1px solid alpha(@theme_border, 0.35);
+}
+
+.md-cell.head {
+  background: alpha(@theme_muted, 0.32);
+}
+
+.md-rule {
+  background: alpha(@theme_border, 0.55);
+  min-height: 1px;
+  margin: 6px 0;
+}
+
+.md-html,
+.md-footnote {
+  font-size: 0.88em;
+  color: @theme_dim_text;
+}
+
+/* ---------- Composer ---------- */
+
+.composer-wrap {
+  padding: 0 0 16px;
+}
+
+.composer {
+  padding: 10px 10px 8px 14px;
+  border-radius: 14px;
+  background: mix(@theme_bg, @theme_muted, 0.25);
+  border: 1px solid alpha(@theme_border, 0.8);
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+.composer:focus-within {
+  border-color: alpha(@theme_accent, 0.72);
+  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38), 0 0 14px alpha(@theme_glow, 0.18);
+}
+
+textview.composer-text,
+textview.composer-text > text {
+  background: transparent;
+  color: @theme_text;
+}
+
+.composer-placeholder {
+  margin: 4px 0 0 2px;
+  color: alpha(@theme_dim_text, 0.85);
+}
+
+.composer-row {
+  margin-top: 2px;
+}
+
+window.chat-window button.send-button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+window.chat-window button.recording {
+  background: alpha(@theme_danger, 0.18);
+  border-color: alpha(@theme_danger, 0.6);
+  color: @theme_danger;
+}
+
+.composer-note {
+  margin-top: 6px;
+  font-size: 0.8em;
+  color: @theme_dim_text;
+}
+
+.attach-strip {
+  padding-bottom: 4px;
+}
+
+.attach-chip {
+  padding: 4px 4px 4px 6px;
+  border-radius: 8px;
+  background: alpha(@theme_bg, 0.6);
+  border: 1px solid alpha(@theme_border, 0.6);
+}
+
+.suggest-row {
+  padding: 4px 6px;
+}
+
+/* ---------- Side panel ---------- */
+
+.side-panel {
+  min-width: 320px;
+  background: @theme_surface;
+  border-left: 1px solid alpha(@theme_border, 0.55);
+}
+
+.panel-body,
+.artifact-panel {
+  padding: 18px 18px 30px;
+}
+
+.panel-body > * {
+  margin-bottom: 6px;
+}
+
+.panel-title {
+  font-size: 1.1em;
+  font-weight: 800;
+}
+
+.panel-heading {
+  margin-top: 14px;
+  font-size: 0.72em;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: @theme_dim_text;
+}
+
+.panel-note {
+  font-size: 0.82em;
+  color: @theme_dim_text;
+}
+
+.panel-label {
+  font-weight: 600;
+}
+
+.artifact-picture {
+  border-radius: 8px;
+  background: alpha(@theme_bg, 0.5);
+}
+
+/* ---------- JSON ---------- */
+
+.json-view {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: alpha(@theme_shadow, 0.25);
+  border: 1px solid alpha(@theme_border, 0.45);
+}
+
+.json-badge {
+  font-size: 0.8em;
+  font-weight: 700;
+  color: @theme_accent;
+}
+
+.json-key {
+  color: @theme_dim_text;
+}
+
+.json-string {
+  color: mix(@theme_accent, @theme_danger, 0.55);
+}
+
+.json-number {
+  color: @theme_danger;
+}
+
+/* ---------- Marketplace ---------- */
+
+.market-controls {
+  margin: 14px 0 12px;
+}
+
+window.chat-window button.market-card {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: mix(@theme_bg, @theme_muted, 0.25);
+  border: 1px solid alpha(@theme_border, 0.55);
+}
+
+window.chat-window button.market-card:hover {
+  border-color: alpha(@theme_border, 0.95);
+  background: mix(@theme_bg, @theme_muted, 0.32);
+}
+
+.market-detail-title {
+  font-size: 1.3em;
+  font-weight: 800;
+}
+
+.quant-row {
+  min-height: 48px;
+}
+
+.quant-row.recommended {
+  border-color: alpha(@theme_accent, 0.72);
+  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38), 0 0 14px alpha(@theme_glow, 0.24);
+}
+
+.quant-name {
+  font-weight: 700;
+}
+
+.readme-card {
+  padding: 16px 20px;
+  border-radius: 8px;
+  background: mix(@theme_bg, @theme_surface, 0.5);
+  border: 1px solid alpha(@theme_border, 0.55);
+}
+
+/* ---------- Arena and stats ---------- */
+
+.arena-row {
+  margin-top: 16px;
+}
+
+.arena-row > .assistant-msg {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid alpha(@theme_border, 0.55);
+  background: mix(@theme_bg, @theme_muted, 0.12);
+}
+
+.arena-votes {
+  margin: 14px 0 4px;
+}
+
+.board-rank {
+  font-weight: 800;
+  color: @theme_accent;
+}
+
+.stat-flow {
+  margin-top: 16px;
+}
+
+.stat-tile {
+  padding: 12px 14px 10px;
+  border-radius: 8px;
+  background: mix(@theme_bg, @theme_muted, 0.25);
+  border: 1px solid alpha(@theme_border, 0.55);
+}
+
+/* ---------- Quick ask ---------- */
+
+.quick-body {
+  background: @theme_bg;
+  padding: 18px 20px 16px;
+}
+
+.quick-context {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: alpha(@theme_accent, 0.08);
+  border: 1px solid alpha(@theme_accent, 0.35);
+}
