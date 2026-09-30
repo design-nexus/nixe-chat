@@ -54,7 +54,6 @@ pub const BUILTIN: &[Info] = &[
         description: "Tell the model roughly where you are, as set under Location.",
         asks: false,
     },
-    Info { name: "get_datetime", title: "Date and time", description: "Today's date, the time and your time zone.", asks: false },
     Info { name: "calculator", title: "Calculator", description: "Exact arithmetic instead of guesses.", asks: false },
     Info {
         name: "read_file",
@@ -94,8 +93,8 @@ pub fn definitions(enabled: &[String], location_on: bool) -> Vec<Value> {
     if on("web_search") {
         out.push(def(
             "web_search",
-            "Search the web. Use for current events, facts you're unsure of, or anything after your training data. \
-             Cite results by their [number].",
+            "Search the web. Use only when the question needs current events, facts you're unsure of, or anything \
+             after your training data; not for greetings or small talk. Cite results by their [number].",
             json!({ "query": { "type": "string", "description": "What to search for" } }),
             &["query"],
         ));
@@ -109,10 +108,8 @@ pub fn definitions(enabled: &[String], location_on: bool) -> Vec<Value> {
         ));
     }
     if on("get_location") && location_on {
-        out.push(def("get_location", "Get the user's current location (city, region, country, coordinates).", json!({}), &[]));
-    }
-    if on("get_datetime") {
-        out.push(def("get_datetime", "Get the current local date, time, weekday and time zone.", json!({}), &[]));
+        out.push(def("get_location", "Get the user's current location (city, region, country, coordinates). Use only when the answer depends on \
+             where the user is, such as weather or nearby places.", json!({}), &[]));
     }
     if on("calculator") {
         out.push(def(
@@ -158,8 +155,11 @@ pub fn definitions(enabled: &[String], location_on: bool) -> Vec<Value> {
 }
 
 pub fn title_for(name: &str) -> String {
-    if name == "list_directory" {
-        return "List folder".into();
+    match name {
+        "list_directory" => return "List folder".into(),
+        // Older chats may have called this before the date moved into the prompt.
+        "get_datetime" => return "Date and time".into(),
+        _ => {}
     }
     if let Some(i) = BUILTIN.iter().find(|i| i.name == name) {
         return i.title.into();
@@ -225,6 +225,11 @@ pub fn datetime() -> String {
         tz.unwrap_or_else(|| "local".into()),
         now.format("%:z")
     )
+}
+
+/// The line every system prompt starts with, so models know the date without a tool.
+pub fn now_line() -> String {
+    format!("Current date and time: {}.", datetime())
 }
 
 /// Fill `{{CURRENT_DATE}}` and friends in a system prompt.

@@ -137,7 +137,7 @@ impl Default for Prefs {
             think: true,
             auto_title: true,
             enter_sends: true,
-            tools_enabled: vec!["web_search".into(), "web_fetch".into(), "get_datetime".into(), "calculator".into()],
+            tools_enabled: vec!["web_search".into(), "web_fetch".into(), "calculator".into()],
             allowed_folders: Vec::new(),
             max_tool_rounds: 8,
             search_backend: "duckduckgo".into(),

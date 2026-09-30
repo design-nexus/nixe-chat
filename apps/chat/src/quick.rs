@@ -207,10 +207,13 @@ fn ask(q: &Rc<Quick>, scroll: &gtk::ScrolledWindow, open_btn: &gtk::Button) {
 
     let pr = prefs::get();
     let mut messages = Vec::new();
-    let system = tools::expand_variables(&pr.system_prompt, &pr, None, None);
-    if !system.trim().is_empty() {
-        messages.push(Msg::new("system", system));
+    let mut system = tools::now_line();
+    let base = tools::expand_variables(&pr.system_prompt, &pr, None, None);
+    if !base.trim().is_empty() {
+        system.push_str("\n\n");
+        system.push_str(base.trim());
     }
+    messages.push(Msg::new("system", system));
     for (u, a) in q.history.borrow().iter() {
         messages.push(Msg::new("user", u.clone()));
         if !a.is_empty() {

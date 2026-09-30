@@ -416,7 +416,12 @@ async fn run(mut p: Prepared, tx: async_channel::Sender<Event>, cancel: Cancel) 
     } else {
         None
     };
-    let mut system = tools::expand_variables(&p.system, &prefs, location.as_deref(), p.clipboard.as_deref());
+    let mut system = tools::now_line();
+    let base = tools::expand_variables(&p.system, &prefs, location.as_deref(), p.clipboard.as_deref());
+    if !base.trim().is_empty() {
+        system.push_str("\n\n");
+        system.push_str(base.trim());
+    }
     if !p.memories.is_empty() {
         system.push_str("\n\nWhat you know about the user (they asked you to remember):\n");
         for m in &p.memories {
