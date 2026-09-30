@@ -57,7 +57,12 @@ pub struct Prefs {
     pub active_host: usize,
 
     // ----- Chat defaults -----
-    pub default_model: String,
+    /// The model new chats start with; empty means the last one picked.
+    pub new_chat_model: String,
+    /// The model last picked in a chat.
+    pub last_model: String,
+    /// Keep the last picked model in memory until another is picked.
+    pub keep_loaded: bool,
     pub system_prompt: String,
     pub user_name: String,
     pub temperature: f64,
@@ -126,7 +131,9 @@ impl Default for Prefs {
             last_chat: 0,
             hosts: vec![Host::default()],
             active_host: 0,
-            default_model: String::new(),
+            new_chat_model: String::new(),
+            last_model: String::new(),
+            keep_loaded: true,
             system_prompt: String::new(),
             user_name: String::new(),
             temperature: 0.7,

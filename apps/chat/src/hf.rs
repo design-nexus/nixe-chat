@@ -205,6 +205,10 @@ fn collect_files(raw: Vec<TreeItem>) -> Vec<GgufFile> {
         files.push(GgufFile { quant, size: item.size, path: item.path });
     }
     files.sort_by_key(|a| a.size);
+    // Repos often carry the same quant more than once (in folders, or as
+    // variants); a pull by quant name gets one of them, so list each once.
+    let mut seen = std::collections::HashSet::new();
+    files.retain(|f| seen.insert(f.quant.clone()));
     files
 }
 

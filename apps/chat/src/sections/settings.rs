@@ -392,33 +392,60 @@ fn host_dialog(index: Option<usize>, h: Host) {
 fn chat_defaults(page: &Page) {
     let g = page.group("Chat defaults");
     let p = prefs::get();
-    let dd_row = widgets::row("Model for new chats", "Chats in a folder use the folder's model when it has one.", None);
+    let dd_row = widgets::row(
+        "Model for new chats",
+        "The last one you picked follows you from chat to chat. Chats in a folder use the folder's model when it has one.",
+        None,
+    );
     let dd = gtk::DropDown::from_strings(&[]);
     dd.set_valign(gtk::Align::Center);
     dd_row.append(&dd);
     g.add(&dd_row);
-    let names: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+    // (id, label); "" is "the last one you picked".
+    let options: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+    let syncing = Rc::new(std::cell::Cell::new(false));
     let fill = {
-        let (dd, names) = (dd.clone(), names.clone());
+        let (dd, options, syncing) = (dd.clone(), options.clone(), syncing.clone());
         move || {
-            let list = models::chat_models();
-            let labels: Vec<String> = list.iter().map(|m| util::model_label(m)).collect();
+            let mut ids = vec![String::new()];
+            ids.extend(models::chat_models());
+            let labels: Vec<String> =
+                ids.iter().map(|m| if m.is_empty() { "The last one you picked".to_string() } else { util::model_label(m) }).collect();
             let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
+            let cur = prefs::get().new_chat_model;
+            // Showing the list must not count as choosing from it.
+            syncing.set(true);
             dd.set_model(Some(&gtk::StringList::new(&refs)));
-            let cur = models::default_model();
-            dd.set_selected(list.iter().position(|m| *m == cur).map(|i| i as u32).unwrap_or(gtk::INVALID_LIST_POSITION));
-            *names.borrow_mut() = list;
+            dd.set_selected(ids.iter().position(|m| *m == cur).unwrap_or(0) as u32);
+            syncing.set(false);
+            *options.borrow_mut() = ids;
         }
     };
     fill();
     hub::on(&hub::MODELS, &dd, fill);
     dd.connect_selected_notify(move |d| {
-        if let Some(m) = names.borrow().get(d.selected() as usize).cloned()
-            && prefs::get().default_model != m
-        {
-            prefs::update(|p| p.default_model = m);
+        if syncing.get() {
+            return;
+        }
+        if let Some(m) = options.borrow().get(d.selected() as usize).cloned() {
+            prefs::update(|p| p.new_chat_model = m);
         }
     });
+    let (r, _) = widgets::switch_row(
+        "Keep the picked model loaded",
+        "The model you pick stays in memory, ready to answer, until you pick another one, in new chats too. Ollama keeps it loaded while this app is closed.",
+        p.keep_loaded,
+        |on| {
+            prefs::update(|p| p.keep_loaded = on);
+            let last = prefs::get().last_model;
+            if on {
+                models::load(&last, None);
+            } else {
+                models::release_pinned();
+            }
+        },
+    );
+    g.add(&r);
 
     entry_row(&g, "Your name", "Models can use it through <tt>{{USER_NAME}}</tt>.", &p.user_name, "Optional", false, |v| {
         prefs::update(|p| p.user_name = v.trim().to_string())

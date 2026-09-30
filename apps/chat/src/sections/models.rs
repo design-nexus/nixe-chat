@@ -277,7 +277,7 @@ fn fill_installed(g: &widgets::Group, list: &gtk::Box) {
         list.append(&e);
         return;
     }
-    let default = prefs::get().default_model;
+    let default = models::default_model();
     for m in installed {
         list.append(&model_row(&m, m.name == default));
     }
@@ -330,6 +330,7 @@ fn model_row(m: &Installed, is_default: bool) -> gtk::Widget {
         let n = m.name.clone();
         chat.connect_clicked(move |_| {
             crate::sections::chat::new_chat(None);
+            models::pick(&n);
             if let Some(p) = crate::sections::chat::page() {
                 p.st.borrow_mut().chat_mut().model = n.clone();
                 crate::sections::chat::refresh_header(&p);
@@ -370,7 +371,7 @@ fn model_menu(m: &Installed) -> gtk::Popover {
     v.append(&menu_item(&pop, "Details…", move || details(&name)));
     let name = m.name.clone();
     v.append(&menu_item(&pop, "Use for new chats", move || {
-        prefs::update(|p| p.default_model = name.clone());
+        prefs::update(|p| p.new_chat_model = name.clone());
         hub::emit(&hub::MODELS);
         window::toast(&format!("New chats start with {name}"));
     }));

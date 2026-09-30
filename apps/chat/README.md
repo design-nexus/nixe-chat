@@ -10,6 +10,10 @@ Chat talks to an Ollama server (on this computer by default). It doesn't run mod
 ## What it does
 
 - **Chat**
+  - The model picker sits above the conversation, with a bar under it that pulses
+    while the model loads and fills once it's in memory. The model you pick stays
+    loaded until you pick another, and new chats start with it (both can be changed in
+    Settings).
   - Replies stream in with Markdown, tables, syntax-highlighted code (with a copy
     button), and formulas shown as readable symbols.
   - Thinking models show their reasoning in a collapsible block.
@@ -59,7 +63,8 @@ Chat talks to an Ollama server (on this computer by default). It doesn't run mod
     filter to text, vision or embedding models.
   - Search the Ollama library and see every tag with its size.
   - Each download is marked **Fits GPU**, **Partial offload** or **Too big** for this
-    computer, and the best fit is marked **Recommended**.
+    computer, counting the memory for the context length set in Settings, and the best
+    fit is marked **Recommended**.
   - Model cards are shown in full. Downloads queue up with progress, speed and time left.
 - **Arena:** two anonymous models answer the same prompt; you vote, and an Elo
   leaderboard keeps score.

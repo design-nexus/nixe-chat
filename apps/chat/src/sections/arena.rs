@@ -207,7 +207,7 @@ fn run_one(model: &str, prompt: &str, md: Rc<Markdown>, done: impl Fn() + 'stati
         think,
         format: None,
         options: json!({ "temperature": pr.temperature, "num_ctx": pr.num_ctx }),
-        keep_alive: pr.keep_alive.clone(),
+        keep_alive: models::keep_alive_for(model),
         max_rounds: 1,
         tool_ctx: tools::Ctx { prefs: pr },
     };

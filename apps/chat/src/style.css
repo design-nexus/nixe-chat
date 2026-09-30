@@ -1700,3 +1700,23 @@ window.chat-window button.market-card:hover {
   background: alpha(@theme_accent, 0.08);
   border: 1px solid alpha(@theme_accent, 0.35);
 }
+
+/* Model load bar under the picker */
+progressbar.model-load > trough {
+  min-height: 3px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.6);
+  border: none;
+}
+
+progressbar.model-load > trough > progress {
+  min-height: 3px;
+  border-radius: 999px;
+  background: alpha(@theme_accent, 0.85);
+  border: none;
+}
+
+progressbar.model-load.loaded > trough > progress {
+  background: @theme_accent;
+  box-shadow: 0 0 6px alpha(@theme_glow, 0.45);
+}

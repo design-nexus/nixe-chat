@@ -33,10 +33,16 @@ pub(super) fn empty_state() -> gtk::Box {
     b
 }
 
-fn fill_empty(p: &Page) {
+/// Keep "Chatting with …" in step with the picker.
+pub(super) fn refresh_empty(p: &Page) {
     let Some(sub) = p.empty.first_child().and_then(|t| t.next_sibling()).and_downcast::<gtk::Label>() else { return };
     let model = p.st.borrow().chat().model.clone();
-    sub.set_text(&if model.is_empty() { String::new() } else { format!("Chatting with {model}") });
+    sub.set_text(&if model.is_empty() { String::new() } else { format!("Chatting with {}", util::model_label(&model)) });
+}
+
+fn fill_empty(p: &Page) {
+    let Some(sub) = p.empty.first_child().and_then(|t| t.next_sibling()).and_downcast::<gtk::Label>() else { return };
+    refresh_empty(p);
     let Some(chips) = sub.next_sibling().and_downcast::<gtk::FlowBox>() else { return };
     chips.remove_all();
     for pr in store::prompts().unwrap_or_default().into_iter().take(6) {

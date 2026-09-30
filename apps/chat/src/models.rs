@@ -17,6 +17,10 @@ struct State {
     error: String,
     updates: HashSet<String>,
     refreshing: bool,
+    /// Being loaded into memory right now.
+    loading: Option<String>,
+    /// The picked model was loaded after the first successful refresh.
+    restored: bool,
 }
 
 thread_local! {
@@ -85,14 +89,101 @@ pub fn updates() -> Vec<String> {
     STATE.with(|s| s.borrow().updates.iter().cloned().collect())
 }
 
-/// The model a new chat starts with: the saved default if it's installed, else the first.
+/// The model a new chat starts with: the chosen one (or the last picked) if
+/// it's installed, else the first installed.
 pub fn default_model() -> String {
-    let want = prefs::get().default_model;
+    let p = prefs::get();
+    let want = if p.new_chat_model.is_empty() { p.last_model } else { p.new_chat_model };
     let chat = chat_models();
     if !want.is_empty() && chat.contains(&want) {
         return want;
     }
     chat.first().cloned().unwrap_or(want)
+}
+
+pub fn is_loaded(name: &str) -> bool {
+    STATE.with(|s| s.borrow().running.iter().any(|r| r.name == name))
+}
+
+pub fn loading() -> Option<String> {
+    STATE.with(|s| s.borrow().loading.clone())
+}
+
+/// Mark a model as loading (or not) for the load indicator.
+pub fn set_loading(name: Option<&str>) {
+    let changed = STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        let new = name.map(String::from);
+        (s.loading != new).then(|| s.loading = new).is_some()
+    });
+    if changed {
+        hub::emit(&hub::MODELS);
+    }
+}
+
+/// How long a request should ask Ollama to keep `model` loaded: forever for
+/// the picked model when "keep loaded" is on, else the setting.
+pub fn keep_alive_for(model: &str) -> String {
+    let p = prefs::get();
+    if p.keep_loaded && p.last_model == model { "-1".into() } else { p.keep_alive }
+}
+
+/// The user picked a model in a chat: new chats follow it, and it's loaded
+/// (and the previously picked one unloaded) when "keep loaded" is on.
+pub fn pick(name: &str) {
+    let prev = prefs::get().last_model;
+    if prev == name {
+        return;
+    }
+    prefs::update(|p| p.last_model = name.to_string());
+    if prefs::get().keep_loaded {
+        load(name, Some(prev).filter(|p| !p.is_empty() && p != name));
+    }
+}
+
+/// Load `name` to stay in memory, unloading `unload` first.
+pub fn load(name: &str, unload: Option<String>) {
+    if name.is_empty() || loading().as_deref() == Some(name) {
+        return;
+    }
+    set_loading(Some(name));
+    let (conn, n) = (Conn::current(), name.to_string());
+    let unload = unload.filter(|u| is_loaded(u));
+    rt::spawn(
+        async move {
+            if let Some(u) = unload {
+                let _ = api::unload(&conn, &u).await;
+            }
+            api::preload(&conn, &n, "-1").await
+        },
+        move |r| {
+            if let Err(e) = r {
+                crate::window::toast(&format!("Couldn't load the model: {}", api::short_error(&format!("{e:#}"))));
+            }
+            STATE.with(|s| s.borrow_mut().loading = None);
+            refresh_running_then_emit();
+        },
+    );
+}
+
+/// Turning "keep loaded" off lets the picked model expire like any other.
+pub fn release_pinned() {
+    let p = prefs::get();
+    if p.last_model.is_empty() || !is_loaded(&p.last_model) {
+        return;
+    }
+    let (conn, n, ka) = (Conn::current(), p.last_model.clone(), p.keep_alive.clone());
+    rt::spawn(async move { api::preload(&conn, &n, &ka).await }, |_| refresh_running_then_emit());
+}
+
+fn refresh_running_then_emit() {
+    let conn = Conn::current();
+    rt::spawn(async move { api::running(&conn).await }, |r| {
+        if let Ok(list) = r {
+            STATE.with(|s| s.borrow_mut().running = list);
+        }
+        hub::emit(&hub::MODELS);
+    });
 }
 
 /// Re-read the model list and each model's capabilities.
@@ -142,6 +233,19 @@ pub fn refresh() {
                 s.updates.retain(|n| names.contains(n));
             });
             hub::emit(&hub::MODELS);
+            // Put the picked model back in memory when the app starts.
+            let first = STATE.with(|s| {
+                let mut s = s.borrow_mut();
+                let first = s.online == Some(true) && !s.restored;
+                if first {
+                    s.restored = true;
+                }
+                first
+            });
+            let p = prefs::get();
+            if first && p.keep_loaded && is_installed(&p.last_model) && !is_loaded(&p.last_model) {
+                load(&p.last_model, None);
+            }
         },
     );
 }

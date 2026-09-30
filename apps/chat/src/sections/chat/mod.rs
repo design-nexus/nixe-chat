@@ -20,6 +20,8 @@ pub use send::Stream;
 pub(crate) struct Page {
     title: gtk::Label,
     model_dd: gtk::DropDown,
+    load_bar: gtk::ProgressBar,
+    load_pulse: RefCell<Option<glib::SourceId>>,
     model_list: RefCell<Vec<String>>,
     caps: gtk::Box,
     compare_btn: gtk::MenuButton,
@@ -94,8 +96,13 @@ pub fn build() -> gtk::Widget {
     root.add_css_class("chat-page");
 
     // ----- Header -----
-    let header = widgets::hbox(8);
+    // Title on the left, the model picker centred, actions on the right.
+    let header = gtk::CenterBox::new();
     header.add_css_class("chat-header");
+    let start = widgets::hbox(8);
+    let end = widgets::hbox(8);
+    header.set_start_widget(Some(&start));
+    header.set_end_widget(Some(&end));
     let history_btn = gtk::MenuButton::new();
     history_btn.set_icon_name("sidebar-show-symbolic");
     history_btn.add_css_class("flat");
@@ -122,7 +129,7 @@ pub fn build() -> gtk::Widget {
     hist.append(&hlist);
     pop.set_child(Some(&hist));
     history_btn.set_popover(Some(&pop));
-    header.append(&history_btn);
+    start.append(&history_btn);
 
     let title_btn = gtk::Button::new();
     title_btn.add_css_class("flat");
@@ -131,7 +138,6 @@ pub fn build() -> gtk::Widget {
     title.set_ellipsize(pango::EllipsizeMode::End);
     title_btn.set_child(Some(&title));
     title_btn.set_tooltip_text(Some("Rename"));
-    title_btn.set_hexpand(true);
     title_btn.set_halign(gtk::Align::Start);
     title.set_width_chars(6);
     title.set_max_width_chars(60);
@@ -145,29 +151,38 @@ pub fn build() -> gtk::Widget {
             chatlist::rename(id, &t);
         }
     });
-    header.append(&title_btn);
+    start.append(&title_btn);
 
     let caps = widgets::hbox(4);
     caps.add_css_class("caps");
-    header.append(&caps);
+    caps.set_valign(gtk::Align::Center);
+    end.append(&caps);
 
+    let picker = widgets::vbox(3);
+    picker.set_valign(gtk::Align::Center);
     let model_dd = gtk::DropDown::from_strings(&[]);
     model_dd.add_css_class("model-picker");
     model_dd.set_enable_search(true);
     model_dd.set_tooltip_text(Some("Model"));
-    header.append(&model_dd);
+    picker.append(&model_dd);
+    // Shows whether the model is in memory: pulsing while it loads, full once loaded.
+    let load_bar = gtk::ProgressBar::new();
+    load_bar.add_css_class("model-load");
+    load_bar.set_pulse_step(0.12);
+    picker.append(&load_bar);
+    header.set_center_widget(Some(&picker));
 
     let compare_btn = gtk::MenuButton::new();
     compare_btn.set_icon_name("list-add-symbolic");
     compare_btn.add_css_class("flat");
     compare_btn.set_tooltip_text(Some("Compare with other models"));
-    header.append(&compare_btn);
+    end.append(&compare_btn);
 
     let settings_btn = gtk::ToggleButton::new();
     settings_btn.set_icon_name("emblem-system-symbolic");
     settings_btn.add_css_class("flat");
     settings_btn.set_tooltip_text(Some("Chat settings"));
-    header.append(&settings_btn);
+    end.append(&settings_btn);
 
     let more = gtk::MenuButton::new();
     more.set_icon_name("view-more-symbolic");
@@ -185,7 +200,7 @@ pub fn build() -> gtk::Widget {
             }
         }
     });
-    header.append(&more);
+    end.append(&more);
     root.append(&header);
 
     let banners = widgets::vbox(0);
@@ -253,6 +268,8 @@ pub fn build() -> gtk::Widget {
     let pg = Rc::new(Page {
         title,
         model_dd: model_dd.clone(),
+        load_bar,
+        load_pulse: RefCell::new(None),
         model_list: RefCell::new(Vec::new()),
         caps,
         compare_btn: compare_btn.clone(),
@@ -318,6 +335,7 @@ pub fn build() -> gtk::Widget {
             }
         };
         if changed {
+            models::pick(&name);
             save_chat(&p);
             refresh_header(&p);
             if p.panel.is_visible() && p.panel_stack.visible_child_name().as_deref() == Some("settings") {
@@ -475,7 +493,6 @@ pub(crate) fn refresh_header(p: &Page) {
         p.model_dd.set_selected(idx);
     }
     p.model_dd.set_sensitive(!list.is_empty());
-    p.model_dd.set_tooltip_text(Some(if model.is_empty() { "Model" } else { &model }));
     widgets::clear(&p.caps);
     if let Some(info) = models::info(&model) {
         for (cap, label) in [("vision", "Vision"), ("tools", "Tools"), ("thinking", "Thinking")] {
@@ -489,6 +506,49 @@ pub(crate) fn refresh_header(p: &Page) {
     }
     p.compare_btn.set_visible(models::chat_models().len() > 1);
     p.composer.refresh();
+    refresh_load(p);
+    view::refresh_empty(p);
+}
+
+/// The bar under the picker: pulsing while the model loads, full when it's
+/// in memory, empty when it isn't.
+pub(crate) fn refresh_load(p: &Page) {
+    let model = p.st.borrow().chat().model.clone();
+    let loading = models::loading().is_some_and(|m| m == model);
+    let loaded = !loading && models::is_loaded(&model);
+    let running = p.load_pulse.borrow().is_some();
+    if loading && !running {
+        let bar = p.load_bar.clone();
+        let id = glib::timeout_add_local(std::time::Duration::from_millis(90), move || {
+            bar.pulse();
+            glib::ControlFlow::Continue
+        });
+        *p.load_pulse.borrow_mut() = Some(id);
+    } else if !loading && let Some(id) = p.load_pulse.borrow_mut().take() {
+        id.remove();
+    }
+    if !loading {
+        p.load_bar.set_fraction(if loaded { 1.0 } else { 0.0 });
+    }
+    for c in ["loading", "loaded"] {
+        p.load_bar.remove_css_class(c);
+    }
+    if loading {
+        p.load_bar.add_css_class("loading");
+    } else if loaded {
+        p.load_bar.add_css_class("loaded");
+    }
+    let tip = if model.is_empty() {
+        "Model".to_string()
+    } else if loading {
+        format!("{model}\nLoading into memory…")
+    } else if loaded {
+        let pinned = prefs::get().keep_loaded && prefs::get().last_model == model;
+        format!("{model}\nLoaded{}", if pinned { ", and stays loaded until you pick another model" } else { "" })
+    } else {
+        format!("{model}\nNot loaded yet; it loads with the first message")
+    };
+    p.model_dd.set_tooltip_text(Some(&tip));
 }
 
 /// Offline server, missing model.

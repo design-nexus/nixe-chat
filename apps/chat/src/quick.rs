@@ -228,13 +228,13 @@ fn ask(q: &Rc<Quick>, scroll: &gtk::ScrolledWindow, open_btn: &gtk::Button) {
     let can = |c: &str| info.as_ref().is_some_and(|i| i.has(c));
     let req = Request {
         conn: Conn::current(),
-        model,
+        model: model.clone(),
         messages,
         tools: if can("tools") { tools::definitions(&safe, pr.location_mode != "off") } else { vec![] },
         think: can("thinking").then_some(false),
         format: None,
         options: json!({ "temperature": pr.temperature, "num_ctx": pr.num_ctx }),
-        keep_alive: pr.keep_alive.clone(),
+        keep_alive: models::keep_alive_for(&model),
         max_rounds: 4,
         tool_ctx: tools::Ctx { prefs: pr },
     };

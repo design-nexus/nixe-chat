@@ -284,9 +284,21 @@ fn start(p: &Rc<Page>, chat_id: i64, model: &str, user_id: i64, first_row: i64, 
     let cancel = stream.cancel.clone();
     let s2 = stream.clone();
     let mut round = 0usize;
+    // Ollama loads the model with the first request; show that on the picker.
+    let mut waiting_for_model = !models::is_loaded(model);
+    if waiting_for_model {
+        models::set_loading(Some(model));
+    }
     let handle = rt::stream(
         move |tx| async move { run(prepared, tx, cancel).await },
         move |ev: Event| {
+            if waiting_for_model && matches!(ev, Event::Delta { .. } | Event::RoundEnd { .. } | Event::Error(_) | Event::Done) {
+                waiting_for_model = false;
+                if models::loading().as_deref() == Some(s2.model.as_str()) {
+                    models::set_loading(None);
+                }
+                models::refresh_running();
+            }
             on_event(&s2, ev, &mut round);
         },
     );
@@ -387,7 +399,7 @@ fn prepare(p: &Page, model: &str, user_id: i64) -> Prepared {
             think,
             format,
             options,
-            keep_alive: pr.keep_alive.clone(),
+            keep_alive: models::keep_alive_for(model),
             max_rounds: pr.max_tool_rounds,
             tool_ctx: tools::Ctx { prefs: pr.clone() },
         },
