@@ -290,7 +290,9 @@ pub fn build() -> gtk::Widget {
     });
     PAGE.with(|p| *p.borrow_mut() = Some(pg.clone()));
 
-    // Follow new text only while the view is at the bottom.
+    // Follow new text until the reader scrolls up, and again once they're back
+    // at the bottom. Only the reader's own scrolling turns following off: layout
+    // changes move the adjustment too, and mustn't be mistaken for that.
     let adj = scroller.vadjustment();
     let p2 = Rc::downgrade(&pg);
     adj.connect_changed(move |a| {
@@ -304,12 +306,44 @@ pub fn build() -> gtk::Widget {
     adj.connect_value_changed(move |a| {
         if let Some(p) = p2.upgrade() {
             let at_bottom = a.value() + a.page_size() >= a.upper() - 48.0;
-            p.follow.set(at_bottom);
-            p.jump.set_visible(!at_bottom);
+            if at_bottom {
+                p.follow.set(true);
+            }
+            p.jump.set_visible(!p.follow.get());
         }
     });
-    let s3 = scroller.clone();
-    jump.connect_clicked(move |_| scroll_to_bottom_now(&s3));
+    let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::KINETIC);
+    wheel.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let p2 = Rc::downgrade(&pg);
+    wheel.connect_scroll(move |_, _, dy| {
+        if dy < 0.0
+            && let Some(p) = p2.upgrade()
+        {
+            p.follow.set(false);
+            p.jump.set_visible(true);
+        }
+        glib::Propagation::Proceed
+    });
+    scroller.add_controller(wheel);
+    let keys = gtk::EventControllerKey::new();
+    let p2 = Rc::downgrade(&pg);
+    keys.connect_key_pressed(move |_, key, _, _| {
+        if matches!(key, gdk::Key::Page_Up | gdk::Key::Up | gdk::Key::Home)
+            && let Some(p) = p2.upgrade()
+        {
+            p.follow.set(false);
+            p.jump.set_visible(true);
+        }
+        glib::Propagation::Proceed
+    });
+    scroller.add_controller(keys);
+    let (s3, p3) = (scroller.clone(), Rc::downgrade(&pg));
+    jump.connect_clicked(move |_| {
+        if let Some(p) = p3.upgrade() {
+            p.follow.set(true);
+        }
+        scroll_to_bottom_now(&s3);
+    });
 
     let p2 = pg.clone();
     settings_btn.connect_toggled(move |b| {
@@ -422,6 +456,16 @@ pub(crate) fn save_chat(p: &Page) {
 /// messages are measured a frame or two after they're added, so a single jump
 /// can land short and leave the last message under the composer.
 pub(crate) fn scroll_to_bottom_now(s: &gtk::ScrolledWindow) {
+    // Slow layouts (long chats, syntax highlighting) can finish after the frames below.
+    for ms in [250, 600, 1200] {
+        let s = s.clone();
+        glib::timeout_add_local_once(std::time::Duration::from_millis(ms), move || {
+            if page().is_some_and(|p| p.follow.get()) {
+                let a = s.vadjustment();
+                a.set_value(a.upper() - a.page_size());
+            }
+        });
+    }
     let frames = Cell::new(0u8);
     s.add_tick_callback(move |s, _| {
         let a = s.vadjustment();
