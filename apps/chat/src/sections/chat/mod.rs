@@ -418,11 +418,16 @@ pub(crate) fn save_chat(p: &Page) {
     }
 }
 
+/// Scroll to the end, and keep doing so for the next few frames: new
+/// messages are measured a frame or two after they're added, so a single jump
+/// can land short and leave the last message under the composer.
 pub(crate) fn scroll_to_bottom_now(s: &gtk::ScrolledWindow) {
-    let s = s.clone();
-    glib::idle_add_local_once(move || {
+    let frames = Cell::new(0u8);
+    s.add_tick_callback(move |s, _| {
         let a = s.vadjustment();
         a.set_value(a.upper() - a.page_size());
+        frames.set(frames.get() + 1);
+        if frames.get() >= 20 { glib::ControlFlow::Break } else { glib::ControlFlow::Continue }
     });
 }
 
