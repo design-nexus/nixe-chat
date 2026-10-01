@@ -1720,3 +1720,31 @@ progressbar.model-load.loaded > trough > progress {
   background: @theme_accent;
   box-shadow: 0 0 6px alpha(@theme_glow, 0.45);
 }
+
+/* Message bar toggles: icon-only, quiet until on */
+window.chat-window button.bar-toggle,
+window.chat-window menubutton.bar-menu > button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.bar-toggle:hover,
+window.chat-window menubutton.bar-menu > button:hover {
+  background: alpha(@theme_highlight, 0.55);
+  color: @theme_text;
+}
+
+window.chat-window button.bar-toggle:checked,
+window.chat-window menubutton.bar-menu.selected > button {
+  background: alpha(@theme_accent, 0.16);
+  color: @theme_accent;
+}
+
+window.chat-window menubutton.bar-menu > button:checked {
+  background: alpha(@theme_accent, 0.22);
+}

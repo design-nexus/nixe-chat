@@ -45,16 +45,23 @@ pub struct Composer {
     syncing: Cell<bool>,
 }
 
-fn chip(icon: &str, label: &str, tip: &str) -> gtk::ToggleButton {
+/// A compact on/off icon button for the message bar.
+fn chip(icon: &str, tip: &str) -> gtk::ToggleButton {
     let b = gtk::ToggleButton::new();
-    let row = widgets::hbox(6);
-    row.append(&gtk::Image::from_icon_name(icon));
-    row.append(&gtk::Label::new(Some(label)));
-    b.set_child(Some(&row));
-    b.add_css_class("chip");
-    b.add_css_class("tool-chip");
+    b.set_icon_name(icon);
+    b.add_css_class("bar-toggle");
     b.set_tooltip_text(Some(tip));
     b
+}
+
+/// Switch the chat on screen to `name`, as if picked in the picker.
+fn switch_model(name: &str) {
+    let Some(p) = super::page() else { return };
+    p.st.borrow_mut().chat_mut().model = name.to_string();
+    crate::models::pick(name);
+    super::save_chat(&p);
+    super::refresh_header(&p);
+    super::refresh_banners(&p);
 }
 
 impl Composer {
@@ -98,32 +105,28 @@ impl Composer {
         row.add_css_class("composer-row");
         let attach = gtk::Button::from_icon_name("mail-attachment-symbolic");
         attach.add_css_class("flat");
+        attach.add_css_class("bar-toggle");
         attach.set_tooltip_text(Some("Attach images or files"));
         row.append(&attach);
         let shot = gtk::Button::from_icon_name("camera-photo-symbolic");
         shot.add_css_class("flat");
+        shot.add_css_class("bar-toggle");
         shot.set_tooltip_text(Some("Attach a screenshot of an area (Ctrl+Shift+S)"));
         row.append(&shot);
 
-        let chips = widgets::hbox(6);
+        let chips = widgets::hbox(2);
         chips.set_hexpand(true);
-        let web = chip("web-browser-symbolic", "Web", "Search the web");
-        let location = chip("mark-location-symbolic", "Location", "Let the model ask where you are");
-        let think = chip("emoji-objects-symbolic", "Think", "Reason before answering");
+        let web = chip("web-browser-symbolic", "Web search");
+        let location = chip("mark-location-symbolic", "Location: let the model ask where you are");
+        let think = chip("emoji-objects-symbolic", "Think before answering");
         let tools_btn = gtk::MenuButton::new();
-        let trow = widgets::hbox(6);
-        trow.append(&gtk::Image::from_icon_name("applications-engineering-symbolic"));
-        trow.append(&gtk::Label::new(Some("Tools")));
-        tools_btn.set_child(Some(&trow));
-        tools_btn.add_css_class("chip");
-        tools_btn.set_tooltip_text(Some("Choose tools for this chat"));
+        tools_btn.set_icon_name("applications-engineering-symbolic");
+        tools_btn.add_css_class("bar-menu");
+        tools_btn.set_tooltip_text(Some("Tools for this chat"));
         let kb_btn = gtk::MenuButton::new();
-        let krow = widgets::hbox(6);
-        krow.append(&gtk::Image::from_icon_name("accessories-dictionary-symbolic"));
-        krow.append(&gtk::Label::new(Some("Knowledge")));
-        kb_btn.set_child(Some(&krow));
-        kb_btn.add_css_class("chip");
-        kb_btn.set_tooltip_text(Some("Answer from your documents (#)"));
+        kb_btn.set_icon_name("accessories-dictionary-symbolic");
+        kb_btn.add_css_class("bar-menu");
+        kb_btn.set_tooltip_text(Some("Knowledge: answer from your documents (#)"));
         for w in [
             web.upcast_ref::<gtk::Widget>(),
             location.upcast_ref(),
@@ -144,6 +147,7 @@ impl Composer {
 
         let mic = gtk::Button::from_icon_name("audio-input-microphone-symbolic");
         mic.add_css_class("flat");
+        mic.add_css_class("bar-toggle");
         mic.set_tooltip_text(Some("Dictate (Ctrl+Space)"));
         row.append(&mic);
         let send = gtk::Button::from_icon_name("go-up-symbolic");
@@ -431,9 +435,9 @@ impl Composer {
         self.think.set_active(chat.params.think.unwrap_or(pr.think));
         self.syncing.set(false);
         self.web.set_tooltip_text(Some(if tools_ok {
-            "Search the web"
+            "Web search"
         } else {
-            "Search the web before every message in this chat (this model can't decide when to search)"
+            "Web search before every message (this model can't decide when to search)"
         }));
         let kb = chat.knowledge.len();
         self.kb_btn.set_visible(!store::kbases().unwrap_or_default().is_empty());
@@ -460,7 +464,30 @@ impl Composer {
         let first = t.chars().next();
         let word_done = t.contains(char::is_whitespace);
         let mut items: Vec<Suggestion> = Vec::new();
+        // "/model" (or the start of it) lists models; "/model qwen" filters them.
+        let model_query = match t.strip_prefix("/model") {
+            Some(rest) if rest.is_empty() || rest.starts_with(' ') => Some(rest.trim().to_lowercase()),
+            _ if !word_done && t.len() > 1 && "/model".starts_with(t.as_str()) => Some(String::new()),
+            _ => None,
+        };
+        if let Some(q) = model_query {
+            for m in models::chat_models().into_iter().filter(|m| m.to_lowercase().contains(&q)) {
+                let me = Rc::downgrade(self);
+                let name = m.clone();
+                items.push((
+                    util::model_label(&m),
+                    if models::is_loaded(&m) { "Loaded".into() } else { "Switch to this model".into() },
+                    Rc::new(move || {
+                        if let Some(c) = me.upgrade() {
+                            c.text.buffer().set_text("");
+                        }
+                        switch_model(&name);
+                    }),
+                ));
+            }
+        }
         match first {
+            Some('/') if !word_done && t.starts_with("/model") => {}
             Some('/') if !word_done => {
                 let q = t[1..].to_lowercase();
                 for pr in store::prompts().unwrap_or_default() {
@@ -491,12 +518,7 @@ impl Composer {
                             if let Some(c) = me.upgrade() {
                                 c.text.buffer().set_text("");
                             }
-                            if let Some(p) = super::page() {
-                                p.st.borrow_mut().chat_mut().model = name.clone();
-                                super::save_chat(&p);
-                                super::refresh_header(&p);
-                                super::refresh_banners(&p);
-                            }
+                            switch_model(&name);
                         }),
                     ));
                 }
