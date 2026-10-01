@@ -26,8 +26,6 @@ pub struct Live {
     pending: Cell<bool>,
     cards: RefCell<Vec<(ToolCall, ToolCard)>>,
     sources: RefCell<Vec<Source>>,
-    /// Scroll to follow after each render.
-    on_grow: RefCell<Option<Box<dyn Fn()>>>,
 }
 
 impl Live {
@@ -38,7 +36,9 @@ impl Live {
         root.set_hexpand(true);
         let head = widgets::hbox(8);
         head.add_css_class("msg-head");
-        head.append(&widgets::label(model, "model-name"));
+        let name = widgets::short_label(model, "model-name", gtk::pango::EllipsizeMode::End);
+        name.set_hexpand(true);
+        head.append(&name);
         let spinner = gtk::Spinner::new();
         spinner.start();
         head.append(&spinner);
@@ -62,18 +62,7 @@ impl Live {
             pending: Cell::new(false),
             cards: RefCell::new(Vec::new()),
             sources: RefCell::new(Vec::new()),
-            on_grow: RefCell::new(None),
         })
-    }
-
-    pub fn set_on_grow(&self, f: impl Fn() + 'static) {
-        *self.on_grow.borrow_mut() = Some(Box::new(f));
-    }
-
-    fn grew(&self) {
-        if let Some(f) = self.on_grow.borrow().as_ref() {
-            f();
-        }
     }
 
     /// A new assistant message begins (after tool results).
@@ -133,7 +122,6 @@ impl Live {
         if let Some(md) = self.md.borrow().as_ref() {
             md.set(&self.content.borrow());
         }
-        self.grew();
     }
 
     pub fn round_end(&self, stats: &Stats) {
@@ -149,7 +137,6 @@ impl Live {
         let card = view::tool_card(call, true);
         self.body.append(&card.root);
         self.cards.borrow_mut().push((call.clone(), card));
-        self.grew();
     }
 
     pub fn tool_result(&self, call: &ToolCall, output: &tools::Output) {
@@ -159,7 +146,6 @@ impl Live {
         if !output.sources.is_empty() {
             *self.sources.borrow_mut() = output.sources.clone();
         }
-        self.grew();
     }
 
     pub fn approval(&self, title: &str, detail: &str, reply: tokio::sync::oneshot::Sender<bool>) {
@@ -193,14 +179,12 @@ impl Live {
         yes.connect_clicked(move |_| a(true));
         no.connect_clicked(move |_| answer(false));
         self.body.append(&card);
-        self.grew();
         yes.grab_focus();
     }
 
     pub fn error(&self, message: &str) {
         self.flush();
         self.body.append(&widgets::banner(&util::esc(message), true));
-        self.grew();
     }
 
     pub fn finish(&self) {

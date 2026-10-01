@@ -96,7 +96,7 @@ fn fill(body: &gtk::Box) {
         bar.set_value(m.replies as f64 / most as f64);
         row.append(&bar);
         let d = widgets::label(
-            &format!("{} replies · {} tokens", m.replies, util::count(m.tokens as u64)),
+            &format!("{} repl{} · {} tokens", m.replies, if m.replies == 1 { "y" } else { "ies" }, util::count(m.tokens as u64)),
             "settings-option-description",
         );
         d.add_css_class("mono");
@@ -157,7 +157,8 @@ fn draw_bars(cr: &cairo::Context, w: f64, h: f64, data: &[(i64, f64)], compact: 
     let plot_h = (h - bottom - top).max(10.0);
     let plot_w = (w - left - 6.0).max(10.0);
     let max = data.iter().map(|d| d.1).fold(0.0, f64::max).max(1.0);
-    let nice = nice_ceiling(max);
+    // Counts get whole-number gridlines (three steps), so no label repeats.
+    let nice = if compact { nice_ceiling(max) } else { ((max / 3.0).ceil() * 3.0).max(3.0) };
 
     cr.set_line_width(1.0);
     cr.set_font_size(11.0);

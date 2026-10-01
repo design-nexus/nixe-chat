@@ -181,7 +181,14 @@ mod network_tests {
                 for f in &d.files {
                     let fit = super::fit(f.size, 8192, mem);
                     if fit != super::Fit::Gpu {
-                        println!("{} {} {} {:?} need {}", m.id, f.quant, crate::util::size(f.size), fit, crate::util::size(super::needed(f.size, 8192)));
+                        println!(
+                            "{} {} {} {:?} need {}",
+                            m.id,
+                            f.quant,
+                            crate::util::size(f.size),
+                            fit,
+                            crate::util::size(super::needed(f.size, 8192))
+                        );
                     }
                 }
             }

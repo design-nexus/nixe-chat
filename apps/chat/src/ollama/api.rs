@@ -198,7 +198,8 @@ pub async fn unload(conn: &Conn, model: &str) -> Result<()> {
 
 /// Load a model ahead of time so the first reply is quick.
 pub async fn preload(conn: &Conn, model: &str, keep_alive: &str) -> Result<()> {
-    check(conn.post("/api/generate").json(&json!({ "model": model, "keep_alive": keep_alive_value(keep_alive) })).send().await?).await?;
+    check(conn.post("/api/generate").json(&json!({ "model": model, "keep_alive": keep_alive_value(keep_alive) })).send().await?)
+        .await?;
     Ok(())
 }
 

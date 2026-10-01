@@ -409,8 +409,10 @@ fn chat_defaults(page: &Page) {
         move || {
             let mut ids = vec![String::new()];
             ids.extend(models::chat_models());
-            let labels: Vec<String> =
-                ids.iter().map(|m| if m.is_empty() { "The last one you picked".to_string() } else { util::model_label(m) }).collect();
+            let labels: Vec<String> = ids
+                .iter()
+                .map(|m| if m.is_empty() { "The last one you picked".to_string() } else { util::model_label(m) })
+                .collect();
             let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
             let cur = prefs::get().new_chat_model;
             // Showing the list must not count as choosing from it.
@@ -549,7 +551,7 @@ fn tools_group(page: &Page) {
             }
             for f in list {
                 let row = widgets::hbox(8);
-                let l = widgets::label(&f, "mono");
+                let l = widgets::short_label(&f, "mono", gtk::pango::EllipsizeMode::Middle);
                 l.set_hexpand(true);
                 row.append(&l);
                 let rm = gtk::Button::from_icon_name("list-remove-symbolic");

@@ -2,7 +2,6 @@
 //! reply to the store as it completes, and tidy up when every stream ends.
 
 use base64::Engine;
-use gtk::prelude::*;
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
@@ -270,16 +269,6 @@ fn start(p: &Rc<Page>, chat_id: i64, model: &str, user_id: i64, first_row: i64, 
         current: Cell::new(first_row),
         primary,
     });
-    let weak = Rc::downgrade(p);
-    live.set_on_grow(move || {
-        if let Some(p) = weak.upgrade()
-            && p.follow.get()
-        {
-            let a = p.scroller.vadjustment();
-            a.set_value(a.upper() - a.page_size());
-        }
-    });
-
     let prepared = prepare(p, model, user_id);
     let cancel = stream.cancel.clone();
     let s2 = stream.clone();

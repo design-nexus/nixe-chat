@@ -26,7 +26,7 @@ struct Market {
     stack: gtk::Stack,
     results: gtk::Box,
     detail: gtk::Box,
-    hf_controls: gtk::Box,
+    hf_controls: gtk::FlowBox,
     memory: Cell<Memory>,
     generation: Cell<u64>,
 }
@@ -46,7 +46,13 @@ pub fn build() -> gtk::Widget {
     let detail = widgets::vbox(10);
     stack.add_named(&results, Some("results"));
     stack.add_named(&detail, Some("detail"));
-    let hf_controls = widgets::hbox(10);
+    // The two filters sit side by side, or one above the other in a narrow window.
+    let hf_controls = gtk::FlowBox::new();
+    hf_controls.set_selection_mode(gtk::SelectionMode::None);
+    hf_controls.set_min_children_per_line(1);
+    hf_controls.set_max_children_per_line(2);
+    hf_controls.set_column_spacing(10);
+    hf_controls.set_row_spacing(8);
 
     let pr = prefs::get();
     let mem = hw::detect(pr.vram_bytes);
@@ -88,16 +94,20 @@ pub fn build() -> gtk::Widget {
         m2.kind.set(Kind::ALL.into_iter().find(|k| k.label() == v).unwrap_or(Kind::All));
         search_now(&m2);
     });
-    hf_controls.append(&kind);
-    let spacer = widgets::hbox(0);
-    spacer.set_hexpand(true);
-    hf_controls.append(&spacer);
+    kind.set_halign(gtk::Align::Start);
+    hf_controls.insert(&kind, -1);
     let m2 = m.clone();
     let sort = widgets::segmented(&Sort::ALL.map(|s| (s.label(), s.label())), Sort::Trending.label(), move |v| {
         m2.sort.set(Sort::ALL.into_iter().find(|s| s.label() == v).unwrap_or(Sort::Trending));
         search_now(&m2);
     });
-    hf_controls.append(&sort);
+    sort.set_halign(gtk::Align::End);
+    hf_controls.insert(&sort, -1);
+    let mut c = hf_controls.first_child();
+    while let Some(w) = c {
+        w.set_focusable(false);
+        c = w.next_sibling();
+    }
     controls.append(&hf_controls);
 
     let mem_note = widgets::label("", "dim");

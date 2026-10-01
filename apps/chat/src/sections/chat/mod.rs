@@ -8,7 +8,7 @@ mod send;
 mod view;
 
 use gtk::prelude::*;
-use gtk::{gdk, glib, pango};
+use gtk::{gdk, glib};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -18,7 +18,6 @@ use crate::{chatlist, hub, models, prefs, widgets, window};
 pub use send::Stream;
 
 pub(crate) struct Page {
-    title: gtk::Label,
     model_dd: gtk::DropDown,
     load_bar: gtk::ProgressBar,
     load_pulse: RefCell<Option<glib::SourceId>>,
@@ -131,27 +130,6 @@ pub fn build() -> gtk::Widget {
     history_btn.set_popover(Some(&pop));
     start.append(&history_btn);
 
-    let title_btn = gtk::Button::new();
-    title_btn.add_css_class("flat");
-    title_btn.add_css_class("chat-title-btn");
-    let title = widgets::label("New chat", "chat-page-title");
-    title.set_ellipsize(pango::EllipsizeMode::End);
-    title_btn.set_child(Some(&title));
-    title_btn.set_tooltip_text(Some("Rename"));
-    title_btn.set_halign(gtk::Align::Start);
-    title.set_width_chars(6);
-    title.set_max_width_chars(60);
-    title_btn.connect_clicked(|_| {
-        let Some(p) = page() else { return };
-        let (id, t) = {
-            let st = p.st.borrow();
-            (st.id(), st.chat().title.clone())
-        };
-        if let Some(id) = id {
-            chatlist::rename(id, &t);
-        }
-    });
-    start.append(&title_btn);
 
     let caps = widgets::hbox(4);
     caps.add_css_class("caps");
@@ -243,7 +221,13 @@ pub fn build() -> gtk::Widget {
     let composer = composer::Composer::new();
     let composer_clamp = crate::clamp::Clamp::new(&composer.root, 860);
     composer_clamp.add_css_class("composer-clamp");
-    center.append(&composer_clamp);
+    // The message bar is its own solid footer under the conversation, not a
+    // card floating over it: the chat view ends where the footer begins.
+    let footer = widgets::vbox(0);
+    footer.add_css_class("chat-footer");
+    footer.set_vexpand(false);
+    footer.append(&composer_clamp);
+    center.append(&footer);
     body.append(&center);
 
     let panel = widgets::vbox(0);
@@ -266,7 +250,6 @@ pub fn build() -> gtk::Widget {
     root.append(&body);
 
     let pg = Rc::new(Page {
-        title,
         model_dd: model_dd.clone(),
         load_bar,
         load_pulse: RefCell::new(None),
@@ -296,10 +279,14 @@ pub fn build() -> gtk::Widget {
     let adj = scroller.vadjustment();
     let p2 = Rc::downgrade(&pg);
     adj.connect_changed(move |a| {
+        // This fires while the view is being laid out; moving the position
+        // then is dropped (the content stays drawn at the old offset and the
+        // newest message ends up hidden), so move it once layout is done.
         if let Some(p) = p2.upgrade()
             && p.follow.get()
         {
-            a.set_value(a.upper() - a.page_size());
+            let a = a.clone();
+            glib::idle_add_local_once(move || a.set_value(a.upper() - a.page_size()));
         }
     });
     let p2 = Rc::downgrade(&pg);
@@ -312,7 +299,8 @@ pub fn build() -> gtk::Widget {
             p.jump.set_visible(!p.follow.get());
         }
     });
-    let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::KINETIC);
+    let wheel =
+        gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::KINETIC);
     wheel.set_propagation_phase(gtk::PropagationPhase::Capture);
     let p2 = Rc::downgrade(&pg);
     wheel.connect_scroll(move |_, _, dy| {
@@ -399,8 +387,11 @@ pub fn build() -> gtk::Widget {
     window::on_narrow({
         let hb = history_btn.clone();
         let lb = pg.live_box.clone();
+        let caps = pg.caps.clone();
         move |narrow| {
             hb.set_visible(narrow);
+            // The capability tags don't fit beside a centred picker in a narrow window.
+            caps.set_visible(!narrow);
             lb.set_orientation(if narrow { gtk::Orientation::Vertical } else { gtk::Orientation::Horizontal });
         }
     });
@@ -452,26 +443,13 @@ pub(crate) fn save_chat(p: &Page) {
     }
 }
 
-/// Scroll to the end and stay there: for the next few frames (new messages
-/// are measured a frame or two after they're added), and for as long as a
-/// reply is being waited for, so nothing that changes size while the model
-/// loads or thinks can leave the newest message under the message bar. Only
-/// the reader scrolling up ends it.
+/// Jump to the newest message once layout is done. Growth after that is
+/// followed by the adjustment's `changed` handler while `follow` is on.
 pub(crate) fn scroll_to_bottom_now(s: &gtk::ScrolledWindow) {
-    let frames = Cell::new(0u32);
-    s.add_tick_callback(move |s, _| {
-        let Some(p) = page() else { return glib::ControlFlow::Break };
-        frames.set(frames.get() + 1);
-        if !p.follow.get() {
-            return glib::ControlFlow::Break;
-        }
+    let s = s.clone();
+    glib::idle_add_local_once(move || {
         let a = s.vadjustment();
-        let bottom = a.upper() - a.page_size();
-        if (a.value() - bottom).abs() > 0.5 {
-            a.set_value(bottom);
-        }
-        let waiting = streaming(p.st.borrow().id());
-        if frames.get() >= 20 && !waiting { glib::ControlFlow::Break } else { glib::ControlFlow::Continue }
+        a.set_value(a.upper() - a.page_size());
     });
 }
 
@@ -521,18 +499,17 @@ fn compare_popover(p: &Rc<Page>) -> gtk::Popover {
 
 /// Title, model list, capability tags.
 pub(crate) fn refresh_header(p: &Page) {
-    let (title, model, compare) = {
+    let (model, compare) = {
         let st = p.st.borrow();
         let c = st.chat();
-        (c.title.clone(), c.model.clone(), c.compare.clone())
+        (c.model.clone(), c.compare.clone())
     };
-    p.title.set_text(&title);
     let mut list = models::chat_models();
     if !model.is_empty() && !list.contains(&model) {
         list.insert(0, model.clone());
     }
     if *p.model_list.borrow() != list {
-        let labels: Vec<String> = list.iter().map(|m| crate::util::clip_middle(&crate::util::model_label(m), 30)).collect();
+        let labels: Vec<String> = list.iter().map(|m| crate::util::clip_middle(&crate::util::model_label(m), 48)).collect();
         let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
         *p.model_list.borrow_mut() = list.clone();
         p.model_dd.set_model(Some(&gtk::StringList::new(&refs)));

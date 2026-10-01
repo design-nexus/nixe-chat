@@ -1,6 +1,7 @@
 //! Arena: two anonymous models answer the same prompt; the user votes, and
 //! an Elo leaderboard keeps score.
 
+use gtk::glib;
 use gtk::prelude::*;
 use serde_json::json;
 use std::cell::{Cell, RefCell};
@@ -84,7 +85,11 @@ pub fn build() -> gtk::Widget {
         move || {
             let mut names = vec![RANDOM.to_string()];
             names.extend(models::chat_models());
-            let labels: Vec<String> = names.iter().map(|m| if m == RANDOM { m.clone() } else { util::model_label(m) }).collect();
+            // Short names: two pickers sit side by side.
+            let labels: Vec<String> = names
+                .iter()
+                .map(|m| if m == RANDOM { m.clone() } else { util::clip_middle(&util::model_label(m), 26) })
+                .collect();
             let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
             a.set_model(Some(&gtk::StringList::new(&refs)));
             b.set_model(Some(&gtk::StringList::new(&refs)));
@@ -97,6 +102,7 @@ pub fn build() -> gtk::Widget {
     note.add_css_class("small-text");
     g.add(&note);
     let (sw, prompt) = widgets::text_area("", false, 80);
+    let prompt_buf = prompt.buffer();
     g.add(&sw);
     let start = gtk::Button::with_label("Start round");
     start.add_css_class("suggested-action");
@@ -168,7 +174,7 @@ pub fn build() -> gtk::Widget {
             let col = widgets::vbox(8);
             col.add_css_class("assistant-msg");
             col.add_css_class("arena-answer");
-            let name = widgets::label(label, "model-name");
+            let name = widgets::short_label(label, "model-name", gtk::pango::EllipsizeMode::End);
             col.append(&name);
             let md = Markdown::new();
             col.append(&md.root);
@@ -186,6 +192,14 @@ pub fn build() -> gtk::Widget {
             });
         }
     });
+    // Developer aid: CHAT_SNAPSHOT_ARENA="prompt" plays a round on its own.
+    if let Ok(text) = std::env::var("CHAT_SNAPSHOT_ARENA") {
+        let s2 = start.clone();
+        glib::timeout_add_local_once(std::time::Duration::from_millis(1500), move || {
+            prompt_buf.set_text(&text);
+            s2.emit_clicked();
+        });
+    }
     let fb = fill_board.clone();
     let clear = widgets::two_click("Reset leaderboard", "Click again to clear every vote", move || {
         let _ = store::clear_votes();
@@ -240,8 +254,10 @@ fn show_votes(votes: &gtk::Box, r: &Rc<Round>, labels: &[gtk::Label], board: Rc<
                 return;
             }
             let _ = store::add_vote(&r2.prompt, &r2.a, &r2.b, id);
-            labels2[0].set_text(&format!("A · {}", r2.a));
-            labels2[1].set_text(&format!("B · {}", r2.b));
+            for (l, (side, m)) in labels2.iter().zip([("A", &r2.a), ("B", &r2.b)]) {
+                l.set_text(&format!("{side} · {}", util::model_label(m)));
+                l.set_tooltip_text(Some(m));
+            }
             widgets::clear(&votes2);
             votes2.append(&widgets::label("Thanks. The leaderboard is updated.", "dim"));
             board2();

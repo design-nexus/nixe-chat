@@ -108,8 +108,13 @@ pub fn definitions(enabled: &[String], location_on: bool) -> Vec<Value> {
         ));
     }
     if on("get_location") && location_on {
-        out.push(def("get_location", "Get the user's current location (city, region, country, coordinates). Use only when the answer depends on \
-             where the user is, such as weather or nearby places.", json!({}), &[]));
+        out.push(def(
+            "get_location",
+            "Get the user's current location (city, region, country, coordinates). Use only when the answer depends on \
+             where the user is, such as weather or nearby places.",
+            json!({}),
+            &[],
+        ));
     }
     if on("calculator") {
         out.push(def(

@@ -10,6 +10,23 @@ use crate::ollama::api::{self, Conn, Installed};
 use crate::pulls::{self, State};
 use crate::{hub, models, prefs, rt, util, widgets, window};
 
+/// Keep a long model name on one line, shortened in the middle, with the
+/// full name on hover.
+fn one_line_title(row: &gtk::Box, full: &str) {
+    let title = row
+        .first_child()
+        .and_downcast::<gtk::Box>()
+        .and_then(|text| text.first_child())
+        .and_then(|w| if w.is::<gtk::Label>() { Some(w) } else { w.first_child() })
+        .and_downcast::<gtk::Label>();
+    if let Some(t) = title {
+        t.set_text(&util::model_label(full));
+        t.set_wrap(false);
+        t.set_ellipsize(pango::EllipsizeMode::Middle);
+        t.set_tooltip_text(Some(full));
+    }
+}
+
 /// A download's id and state, with the widgets updated in place.
 type DownloadRow = (u64, State, gtk::LevelBar, gtk::Label);
 
@@ -213,6 +230,7 @@ fn fill_running(g: &widgets::Group, list: &gtk::Box) {
             _ => format!("{} · {place} · stays loaded", util::size(m.size)),
         };
         let name = m.name.clone();
+        let full = m.name.clone();
         let (row, _) = widgets::button_row(&m.name, &desc, "Unload", move |b| {
             b.set_sensitive(false);
             let (conn, n) = (Conn::current(), name.clone());
@@ -223,6 +241,7 @@ fn fill_running(g: &widgets::Group, list: &gtk::Box) {
                 models::refresh_running();
             });
         });
+        one_line_title(&row, &full);
         list.append(&row);
     }
 }
@@ -295,11 +314,13 @@ fn model_row(m: &Installed, is_default: bool) -> gtk::Widget {
         bits.push(format!("updated {}", util::ago(t)));
     }
     let row = widgets::row(&m.name, &util::esc(&bits.join(" · ")), None);
+    one_line_title(&row, &m.name);
     // Tags after the title.
     if let Some(text) = row.first_child().and_downcast::<gtk::Box>() {
         let title_row = widgets::hbox(6);
         if let Some(t) = text.first_child() {
             text.remove(&t);
+            t.set_hexpand(false);
             title_row.append(&t);
         }
         if is_default {

@@ -54,7 +54,8 @@ pub fn open(app: &gtk::Application, context: Option<String>) {
     t.set_hexpand(true);
     head.append(&t);
     let model = quick_model();
-    let ml = widgets::label(&util::model_label(&model), "mono");
+    let ml = widgets::short_label(&util::model_label(&model), "mono", gtk::pango::EllipsizeMode::Middle);
+    ml.set_max_width_chars(40);
     ml.add_css_class("dim");
     ml.add_css_class("small-text");
     head.append(&ml);

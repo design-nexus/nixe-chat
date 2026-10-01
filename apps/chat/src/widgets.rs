@@ -273,6 +273,16 @@ pub fn vbox(spacing: i32) -> gtk::Box {
     gtk::Box::new(gtk::Orientation::Vertical, spacing)
 }
 
+/// A one-line label for text that can be long (model names, titles, paths):
+/// it shortens with an ellipsis instead of widening the page, and shows the
+/// whole text on hover.
+pub fn short_label(text: &str, class: &str, mode: pango::EllipsizeMode) -> gtk::Label {
+    let l = label(text, class);
+    l.set_ellipsize(mode);
+    l.set_tooltip_text(Some(text));
+    l
+}
+
 pub fn label(text: &str, class: &str) -> gtk::Label {
     let l = gtk::Label::new(Some(text));
     if !class.is_empty() {

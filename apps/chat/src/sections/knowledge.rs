@@ -20,6 +20,8 @@ pub fn build() -> gtk::Widget {
     entry.set_hexpand(true);
     let create = gtk::Button::with_label("Create");
     create.add_css_class("suggested-action");
+    create.set_valign(gtk::Align::Center);
+    entry.set_valign(gtk::Align::Center);
     let row = widgets::hbox(8);
     row.add_css_class("settings-option");
     row.append(&entry);
@@ -103,10 +105,11 @@ fn fill(list: &gtk::Box) {
         let wrapper = widgets::vbox(6);
         wrapper.add_css_class("settings-group");
         let head = widgets::hbox(8);
-        let t = widgets::label(&kb.name.to_uppercase(), "group-title");
+        let t = widgets::short_label(&kb.name.to_uppercase(), "group-title", gtk::pango::EllipsizeMode::End);
         t.set_hexpand(true);
         head.append(&t);
-        let m = widgets::label(&kb.model, "dim");
+        let m = widgets::short_label(&kb.model, "dim", gtk::pango::EllipsizeMode::Middle);
+        m.set_max_width_chars(30);
         m.add_css_class("mono");
         m.add_css_class("small-text");
         m.set_tooltip_text(Some("Embedding model"));

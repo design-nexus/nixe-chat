@@ -1167,7 +1167,7 @@ window.chat-window button.chat-title-btn {
 }
 
 window.chat-window dropdown.model-picker > button {
-  min-width: 180px;
+  min-width: 360px;
   font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
   font-size: 0.9em;
 }
@@ -1181,7 +1181,13 @@ window.chat-window dropdown.model-picker > button {
 }
 
 .messages {
-  padding: 24px 0 32px;
+  padding: 24px 0 24px;
+}
+
+.chat-footer {
+  background: @theme_bg;
+  border-top: 1px solid alpha(@theme_border, 0.45);
+  padding: 12px 0 0;
 }
 
 .composer-clamp {

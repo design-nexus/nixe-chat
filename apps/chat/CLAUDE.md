@@ -28,5 +28,11 @@
   `XDG_CONFIG_HOME`/`XDG_DATA_HOME`/`XDG_CACHE_HOME`:
   `CHAT_SNAPSHOT=/tmp/x.png [CHAT_SNAPSHOT_W=… CHAT_SNAPSHOT_H=… CHAT_SNAPSHOT_DELAY=ms] chat --section models`.
   Extra hooks for whole flows: `CHAT_SNAPSHOT_SEND="question"`, `CHAT_SNAPSHOT_COMPARE=model`,
-  `CHAT_SNAPSHOT_REPO=user/repo`, `CHAT_SNAPSHOT_PULL=name`; `chat --quick` also honours
-  `CHAT_SNAPSHOT` and `CHAT_SNAPSHOT_SEND`.
+  `CHAT_SNAPSHOT_REPO=user/repo`, `CHAT_SNAPSHOT_PULL=name`, `CHAT_SNAPSHOT_ARENA="prompt"`;
+  `chat --quick` also honours `CHAT_SNAPSHOT` and `CHAT_SNAPSHOT_SEND`.
+- Layout checks: `CHAT_DEBUG_WIDTH=736` (with `CHAT_SNAPSHOT`) prints the innermost widgets
+  whose minimum width is over that, i.e. what makes a page wider than an 800 px window.
+  Long one-line text (model names, titles, paths) goes through `widgets::short_label`.
+  `CHAT_AUTOSEND="text"` sends a message in a normal (visible) window, for checking with grim.
+- Never move a scroll adjustment inside its `changed` handler: that runs during layout and
+  GTK drops the move, leaving content drawn at the old offset. Defer it (idle or tick).

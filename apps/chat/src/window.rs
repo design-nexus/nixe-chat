@@ -511,6 +511,42 @@ fn snapshot_and_quit(app: &gtk::Application, out: std::path::PathBuf) {
     snapshot_window(app, window.upcast_ref(), out);
 }
 
+fn report_wide(w: &gtk::Widget, limit: i32) {
+    if !w.is_visible() {
+        return;
+    }
+    let (min, _, _, _) = w.measure(gtk::Orientation::Horizontal, -1);
+    if min <= limit {
+        return;
+    }
+    let mut child = w.first_child();
+    let mut any = false;
+    while let Some(c) = child {
+        let (cm, _, _, _) = c.measure(gtk::Orientation::Horizontal, -1);
+        if c.is_visible() && cm > limit {
+            any = true;
+            report_wide(&c, limit);
+        }
+        child = c.next_sibling();
+    }
+    if !any {
+        let text = w.downcast_ref::<gtk::Label>().map(|l| l.text().to_string()).unwrap_or_default();
+        let mut path = Vec::new();
+        let mut cur = Some(w.clone());
+        while let Some(x) = cur {
+            let c = x.css_classes().join(".");
+            if !c.is_empty() {
+                path.push(c);
+            }
+            if path.len() >= 4 {
+                break;
+            }
+            cur = x.parent();
+        }
+        println!("WIDE {} min {min} [{}] {:?}", w.type_().name(), path.join(" < "), crate::util::clip(&text, 60));
+    }
+}
+
 /// Render `window` to a PNG (invisibly) after a delay, then quit.
 pub fn snapshot_window(app: &gtk::Application, window: &gtk::Window, out: std::path::PathBuf) {
     window.set_opacity(0.01);
@@ -523,6 +559,13 @@ pub fn snapshot_window(app: &gtk::Application, window: &gtk::Window, out: std::p
     let (app, window) = (app.clone(), window.clone());
     let delay = std::env::var("CHAT_SNAPSHOT_DELAY").ok().and_then(|v| v.parse().ok()).unwrap_or(2500);
     glib::timeout_add_local_once(std::time::Duration::from_millis(delay), move || {
+        // CHAT_DEBUG_WIDTH=px lists the innermost widgets that need more width
+        // than that, which is what makes a page wider than the window.
+        if let Some(limit) = std::env::var("CHAT_DEBUG_WIDTH").ok().and_then(|v| v.parse::<i32>().ok())
+            && let Some(child) = window.child()
+        {
+            report_wide(&child, limit);
+        }
         if let Some(child) = window.child() {
             let paintable = gtk::WidgetPaintable::new(Some(&child));
             let (w, h) = (child.width(), child.height());

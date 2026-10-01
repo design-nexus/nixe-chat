@@ -134,7 +134,9 @@ fn user_bubble(p: &Rc<Page>, m: &Message, all: &[Message]) -> gtk::Widget {
             let chip = widgets::hbox(6);
             chip.add_css_class("file-chip");
             chip.append(&gtk::Image::from_icon_name("text-x-generic-symbolic"));
-            chip.append(&widgets::label(&f.name, ""));
+            let name = widgets::short_label(&f.name, "", pango::EllipsizeMode::Middle);
+            name.set_max_width_chars(32);
+            chip.append(&name);
             chip.set_tooltip_text(Some(&format!("{} characters", f.chars)));
             row.insert(&chip, -1);
         }
@@ -317,7 +319,7 @@ fn answer(p: &Rc<Page>, chain: &[Message], all: &[Message], json_mode: bool, com
 
     let head = widgets::hbox(8);
     head.add_css_class("msg-head");
-    let model = widgets::label(&first.model, "model-name");
+    let model = widgets::short_label(&first.model, "model-name", pango::EllipsizeMode::End);
     model.set_ellipsize(pango::EllipsizeMode::End);
     head.append(&model);
     let last = chain.iter().rev().find(|m| m.role == "assistant").unwrap_or(first);
