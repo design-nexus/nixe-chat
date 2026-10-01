@@ -93,6 +93,11 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
     if let Some(ui) = ui() {
         ui.borrow().window.present();
     }
+    // Developer aid: CHAT_AUTOSEND="question" sends it a few seconds after
+    // the window shows, for checking layout with a real compositor and grim.
+    if let Ok(text) = std::env::var("CHAT_AUTOSEND") {
+        glib::timeout_add_local_once(std::time::Duration::from_millis(3500), move || sections::chat::send_text(&text));
+    }
 }
 
 /// A few symbolic icons icon themes may lack, and the app icon for

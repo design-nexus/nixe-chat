@@ -452,26 +452,26 @@ pub(crate) fn save_chat(p: &Page) {
     }
 }
 
-/// Scroll to the end, and keep doing so for the next few frames: new
-/// messages are measured a frame or two after they're added, so a single jump
-/// can land short and leave the last message under the composer.
+/// Scroll to the end and stay there: for the next few frames (new messages
+/// are measured a frame or two after they're added), and for as long as a
+/// reply is being waited for, so nothing that changes size while the model
+/// loads or thinks can leave the newest message under the message bar. Only
+/// the reader scrolling up ends it.
 pub(crate) fn scroll_to_bottom_now(s: &gtk::ScrolledWindow) {
-    // Slow layouts (long chats, syntax highlighting) can finish after the frames below.
-    for ms in [250, 600, 1200] {
-        let s = s.clone();
-        glib::timeout_add_local_once(std::time::Duration::from_millis(ms), move || {
-            if page().is_some_and(|p| p.follow.get()) {
-                let a = s.vadjustment();
-                a.set_value(a.upper() - a.page_size());
-            }
-        });
-    }
-    let frames = Cell::new(0u8);
+    let frames = Cell::new(0u32);
     s.add_tick_callback(move |s, _| {
-        let a = s.vadjustment();
-        a.set_value(a.upper() - a.page_size());
+        let Some(p) = page() else { return glib::ControlFlow::Break };
         frames.set(frames.get() + 1);
-        if frames.get() >= 20 { glib::ControlFlow::Break } else { glib::ControlFlow::Continue }
+        if !p.follow.get() {
+            return glib::ControlFlow::Break;
+        }
+        let a = s.vadjustment();
+        let bottom = a.upper() - a.page_size();
+        if (a.value() - bottom).abs() > 0.5 {
+            a.set_value(bottom);
+        }
+        let waiting = streaming(p.st.borrow().id());
+        if frames.get() >= 20 && !waiting { glib::ControlFlow::Break } else { glib::ControlFlow::Continue }
     });
 }
 
