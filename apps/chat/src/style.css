@@ -28,12 +28,47 @@ window.chat-window dialog {
 }
 
 .settings-navigation.compact {
-  min-width: 64px;
-  padding: 16px 8px;
+  min-width: 0;
+  padding: 16px 6px;
+}
+
+.settings-navigation.compact button.nav-item {
+  min-width: 40px;
+  padding: 0;
+}
+
+.settings-navigation .nav-head {
+  margin-bottom: 14px;
+}
+
+.settings-navigation.compact .nav-head {
+  margin-bottom: 10px;
+}
+
+window.chat-window .settings-navigation button.nav-collapse {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 7px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+window.chat-window .settings-navigation button.nav-collapse image {
+  color: @theme_dim_text;
+}
+
+window.chat-window .settings-navigation button.nav-collapse:hover {
+  background: alpha(@theme_highlight, 0.7);
+}
+
+window.chat-window .settings-navigation button.nav-collapse:hover image {
+  color: @theme_text;
 }
 
 .settings-navigation .menu-heading {
-  margin: 2px 10px 14px;
+  margin: 0 10px;
   font-size: 0.875em;
   font-weight: 800;
   letter-spacing: 2px;
@@ -1029,7 +1064,8 @@ window.chat-window button.new-chat {
   min-height: 30px;
   min-width: 30px;
   padding: 0;
-  margin: 0 2px 12px 0;
+  margin: 0;
+  border-radius: 7px;
 }
 
 window.chat-window button.new-chat image {

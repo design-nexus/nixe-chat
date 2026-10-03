@@ -136,15 +136,23 @@ fn build(app: &gtk::Application) {
     let mut compact_hide: Vec<gtk::Widget> = Vec::new();
 
     let head = widgets::hbox(6);
+    head.add_css_class("nav-head");
     let heading = widgets::label("CHAT", "menu-heading");
     heading.set_hexpand(true);
     head.append(&heading);
     let new_chat = gtk::Button::from_icon_name("document-new-symbolic");
     new_chat.add_css_class("flat");
     new_chat.add_css_class("new-chat");
+    new_chat.set_valign(gtk::Align::Center);
     new_chat.set_tooltip_text(Some("New chat (Ctrl+N)"));
     new_chat.connect_clicked(|_| sections::chat::new_chat(None));
     head.append(&new_chat);
+    let collapse = gtk::Button::from_icon_name("sidebar-show-symbolic");
+    collapse.add_css_class("nav-collapse");
+    collapse.set_tooltip_text(Some("Collapse or expand the sidebar (Ctrl+B)"));
+    collapse.set_valign(gtk::Align::Center);
+    collapse.connect_clicked(|_| toggle_sidebar());
+    head.append(&collapse);
     nav.append(&head);
     compact_hide.push(heading.clone().upcast());
 
@@ -239,6 +247,10 @@ fn build(app: &gtk::Application) {
                 sections::chat::new_chat(None);
                 glib::Propagation::Stop
             }
+            gdk::Key::b if ctrl => {
+                toggle_sidebar();
+                glib::Propagation::Stop
+            }
             gdk::Key::q | gdk::Key::w if ctrl => {
                 w2.close();
                 glib::Propagation::Stop
@@ -269,26 +281,27 @@ fn build(app: &gtk::Application) {
     window.add_controller(keys);
 
     // Narrow windows (a tiled half-screen) get an icon-only sidebar.
+    SIDEBAR.with(|s| {
+        *s.borrow_mut() = Some(Sidebar {
+            nav: nav.clone(),
+            head: head.clone(),
+            spacer: spacer.clone(),
+            new_chat: new_chat.clone(),
+            collapse: collapse.clone(),
+            hide: compact_hide,
+        })
+    });
     let apply_width = {
         let nav = nav.clone();
-        let spacer = spacer.clone();
         move |w: &gtk::ApplicationWindow| {
             let width = if w.width() > 0 { w.width() } else { w.default_width() };
-            let compact = width > 0 && width < 980;
-            if compact == nav.has_css_class("compact") && nav.has_css_class("sized") {
+            let narrow = width > 0 && width < 980;
+            if narrow == NARROW.with(|n| n.get()) && nav.has_css_class("sized") {
                 return;
             }
             nav.add_css_class("sized");
-            if compact {
-                nav.add_css_class("compact");
-            } else {
-                nav.remove_css_class("compact");
-            }
-            for wdg in &compact_hide {
-                wdg.set_visible(!compact);
-            }
-            spacer.set_visible(compact);
-            set_narrow(compact);
+            set_narrow(narrow);
+            apply_compact(narrow || prefs::get().sidebar_collapsed);
         }
     };
     let aw = apply_width.clone();
@@ -379,6 +392,69 @@ pub fn switch_host(i: usize) {
     prefs::update(|p| p.active_host = i);
     hub::emit(&hub::HOST);
     models::refresh();
+}
+
+/// The parts of the sidebar that change when it collapses to icons.
+struct Sidebar {
+    nav: gtk::Box,
+    /// The heading row: the new-chat and collapse buttons stack in the icon-only sidebar.
+    head: gtk::Box,
+    spacer: gtk::Box,
+    new_chat: gtk::Button,
+    collapse: gtk::Button,
+    /// Hidden in the icon-only sidebar.
+    hide: Vec<gtk::Widget>,
+}
+
+thread_local! {
+    static SIDEBAR: RefCell<Option<Sidebar>> = const { RefCell::new(None) };
+}
+
+/// The sidebar shows only icons: hide the labels, centre the icons and the buttons.
+fn apply_compact(compact: bool) {
+    SIDEBAR.with(|s| {
+        let s = s.borrow();
+        let Some(s) = s.as_ref() else { return };
+        if compact {
+            s.nav.add_css_class("compact");
+        } else {
+            s.nav.remove_css_class("compact");
+        }
+        for w in &s.hide {
+            w.set_visible(!compact);
+        }
+        s.spacer.set_visible(compact);
+        s.head.set_orientation(if compact { gtk::Orientation::Vertical } else { gtk::Orientation::Horizontal });
+        s.head.set_spacing(if compact { 4 } else { 6 });
+        // Icon-only: the collapse button leads, so it stays put when the sidebar expands.
+        if compact {
+            s.head.reorder_child_after(&s.collapse, None::<&gtk::Widget>);
+        } else {
+            s.head.reorder_child_after(&s.collapse, Some(&s.new_chat));
+        }
+        centre_icons(s.nav.upcast_ref(), compact);
+    });
+}
+
+fn centre_icons(w: &gtk::Widget, compact: bool) {
+    if w.has_css_class("nav-item")
+        && let Some(content) = w.downcast_ref::<gtk::Button>().and_then(|b| b.child())
+    {
+        content.set_halign(if compact { gtk::Align::Center } else { gtk::Align::Fill });
+    }
+    if w.has_css_class("nav-collapse") || w.has_css_class("new-chat") {
+        w.set_halign(if compact { gtk::Align::Center } else { gtk::Align::End });
+    }
+    let mut child = w.first_child();
+    while let Some(c) = child {
+        centre_icons(&c, compact);
+        child = c.next_sibling();
+    }
+}
+
+pub fn toggle_sidebar() {
+    prefs::update(|p| p.sidebar_collapsed = !p.sidebar_collapsed);
+    apply_compact(NARROW.with(|n| n.get()) || prefs::get().sidebar_collapsed);
 }
 
 fn set_narrow(narrow: bool) {
