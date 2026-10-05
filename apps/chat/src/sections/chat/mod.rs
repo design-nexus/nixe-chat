@@ -23,6 +23,8 @@ pub(crate) struct Page {
     load_pulse: RefCell<Option<glib::SourceId>>,
     model_list: RefCell<Vec<String>>,
     caps: gtk::Box,
+    /// How full the context was after the last reply.
+    ctx_meter: gtk::LevelBar,
     compare_btn: gtk::MenuButton,
     banners: gtk::Box,
     scroller: gtk::ScrolledWindow,
@@ -85,24 +87,40 @@ pub fn title() -> String {
     page().map(|p| p.st.borrow().chat().title.clone()).filter(|t| !t.is_empty()).unwrap_or_else(|| "New chat".into())
 }
 
-/// The status bar's readout on the chat page: the model, and the last reply's
-/// speed and length.
+/// The status bar's readout on the chat page: the model, the last reply's
+/// speed, and how full the context is.
 pub fn status_text() -> String {
     let Some(p) = page() else { return String::new() };
     let st = p.st.borrow();
-    let model = crate::util::model_label(&st.chat().model);
-    let last = st.all.iter().rev().find(|m| m.role == "assistant" && m.tokens > 0);
-    match last {
-        Some(m) if m.tps > 0.0 => format!("{model} · {:.0} tok/s · {} tokens", m.tps, m.tokens),
-        Some(m) => format!("{model} · {} tokens", m.tokens),
-        None => model,
+    let mut parts = vec![crate::util::model_label(&st.chat().model)];
+    let path = store::path_to(&st.all, st.chat().leaf);
+    if let Some(m) = path.iter().rev().find(|m| m.role == "assistant" && m.tps > 0.0) {
+        parts.push(format!("{:.0} tok/s", m.tps));
+    }
+    if let Some(used) = send::context_used(&path) {
+        parts.push(format!("ctx {} / {}", short_count(used), short_count(send::context_limit(st.chat()) as u64)));
+    }
+    parts.join(" · ")
+}
+
+/// 3.1k, 8k, 128k.
+fn short_count(n: u64) -> String {
+    if n < 1000 {
+        n.to_string()
+    } else if n.is_multiple_of(1024) {
+        format!("{}k", n / 1024)
+    } else if n < 10_000 {
+        format!("{:.1}k", n as f64 / 1000.0)
+    } else {
+        format!("{}k", (n as f64 / 1000.0).round())
     }
 }
 
-fn draft_chat(folder: Option<i64>) -> Chat {
+fn draft_chat(folder: Option<i64>, temporary: bool) -> Chat {
     let f = folder.and_then(store::folder);
     let model = f.as_ref().map(|f| f.model.clone()).filter(|m| !m.is_empty()).unwrap_or_else(models::default_model);
-    let mut c = Chat { title: "New chat".into(), folder, model, ..Default::default() };
+    let title = if temporary { "Temporary chat" } else { "New chat" };
+    let mut c = Chat { title: title.into(), folder, model, temporary, ..Default::default() };
     if let Some(f) = f {
         c.knowledge = f.knowledge.clone();
     }
@@ -168,6 +186,13 @@ pub fn build() -> gtk::Widget {
     caps.add_css_class("caps");
     caps.set_valign(gtk::Align::Center);
     header.append(&caps);
+
+    let ctx_meter = widgets::usage_bar();
+    ctx_meter.add_css_class("ctx-meter");
+    ctx_meter.set_hexpand(false);
+    ctx_meter.set_size_request(56, -1);
+    ctx_meter.set_visible(false);
+    header.append(&ctx_meter);
 
     let compare_btn = gtk::MenuButton::new();
     compare_btn.set_icon_name("list-add-symbolic");
@@ -274,6 +299,7 @@ pub fn build() -> gtk::Widget {
         load_pulse: RefCell::new(None),
         model_list: RefCell::new(Vec::new()),
         caps,
+        ctx_meter,
         compare_btn: compare_btn.clone(),
         banners,
         scroller: scroller.clone(),
@@ -288,7 +314,7 @@ pub fn build() -> gtk::Widget {
         history_btn: history_btn.clone(),
         jump: jump.clone(),
         follow: Cell::new(true),
-        st: RefCell::new(State { draft: draft_chat(None), ..Default::default() }),
+        st: RefCell::new(State { draft: draft_chat(None, false), ..Default::default() }),
     });
     PAGE.with(|p| *p.borrow_mut() = Some(pg.clone()));
 
@@ -557,7 +583,32 @@ pub(crate) fn refresh_header(p: &Page) {
     p.composer.refresh();
     refresh_load(p);
     view::refresh_empty(p);
+    refresh_context(p);
     window::refresh_crumb();
+    window::set_temporary_toggle(p.st.borrow().chat().temporary);
+}
+
+/// The context meter and the status bar readout, after a reply or a switch.
+pub(crate) fn refresh_context(p: &Page) {
+    let (limit, used) = {
+        let st = p.st.borrow();
+        let path = store::path_to(&st.all, st.chat().leaf);
+        (send::context_limit(st.chat()), send::context_used(&path))
+    };
+    match used {
+        Some(used) if limit > 0 => {
+            let f = (used as f64 / limit as f64).min(1.0);
+            p.ctx_meter.set_value(f);
+            p.ctx_meter.set_tooltip_text(Some(&format!(
+                "Context: {} of {} tokens used ({:.0}%)",
+                crate::util::count(used),
+                crate::util::count(limit as u64),
+                f * 100.0
+            )));
+            p.ctx_meter.set_visible(true);
+        }
+        _ => p.ctx_meter.set_visible(false),
+    }
     window::refresh_note();
 }
 
@@ -602,9 +653,35 @@ pub(crate) fn refresh_load(p: &Page) {
     p.model_dd.set_tooltip_text(Some(&tip));
 }
 
-/// Offline server, missing model.
+/// Offline server, missing model, temporary chat.
 pub(crate) fn refresh_banners(p: &Page) {
     widgets::clear(&p.banners);
+    if p.st.borrow().chat().temporary {
+        let b = widgets::banner(
+            "<b>Temporary chat.</b> It isn't saved or searchable, and it's deleted when you leave it.",
+            false,
+        );
+        let keep = gtk::Button::with_label("Keep it");
+        keep.set_valign(gtk::Align::Center);
+        keep.set_tooltip_text(Some("Save this chat with the others"));
+        keep.connect_clicked(|_| {
+            let Some(p) = page() else { return };
+            {
+                let mut st = p.st.borrow_mut();
+                let c = st.chat_mut();
+                c.temporary = false;
+                if c.title == "Temporary chat" {
+                    c.title = "New chat".into();
+                }
+            }
+            save_chat(&p);
+            refresh_banners(&p);
+            refresh_header(&p);
+            hub::emit(&hub::CHATS);
+        });
+        b.append(&keep);
+        p.banners.append(&b);
+    }
     match models::online() {
         Some(false) => {
             let local =
@@ -688,8 +765,48 @@ pub fn open(id: i64) {
     }
 }
 
+/// Leaving the chat on screen: a temporary one is deleted (unless it's the one
+/// being opened again).
+fn leave(p: &Page, next: Option<i64>) {
+    let current = p.st.borrow().chat.clone();
+    if let Some(c) = current
+        && c.temporary
+        && Some(c.id) != next
+    {
+        STREAMS.with(|s| {
+            for x in s.borrow().iter().filter(|x| x.chat == c.id) {
+                x.stop();
+            }
+        });
+        let _ = store::delete_chat(c.id);
+        p.st.borrow_mut().chat = None;
+    }
+}
+
+/// Delete the temporary chat on screen (the window is closing).
+pub fn discard_temporary() {
+    if let Some(p) = page() {
+        leave(&p, None);
+    }
+    let _ = store::purge_temporary();
+}
+
+pub fn is_temporary() -> bool {
+    page().is_some_and(|p| p.st.borrow().chat().temporary)
+}
+
+/// Start a chat that isn't kept, or go back to a normal one.
+pub fn set_temporary(on: bool) {
+    if is_temporary() == on {
+        return;
+    }
+    start_chat(None, on);
+    window::toast(if on { "Temporary chat: it's deleted when you leave it" } else { "New chat" });
+}
+
 /// Put a chat on the page (without switching pages: `build` uses this too).
 fn show(p: &Rc<Page>, id: i64) {
+    leave(p, Some(id));
     let Ok(Some(chat)) = store::chat(id) else {
         window::toast("That chat no longer exists");
         return;
@@ -714,13 +831,18 @@ fn show(p: &Rc<Page>, id: i64) {
 }
 
 pub fn new_chat(folder: Option<i64>) {
+    start_chat(folder, false);
+}
+
+fn start_chat(folder: Option<i64>, temporary: bool) {
     window::navigate("chat");
     let Some(p) = page() else { return };
+    leave(&p, None);
     {
         let mut st = p.st.borrow_mut();
         st.chat = None;
         st.all.clear();
-        st.draft = draft_chat(folder);
+        st.draft = draft_chat(folder, temporary);
     }
     prefs::update(|pr| pr.last_chat = 0);
     render(&p);
@@ -753,6 +875,9 @@ pub fn closed(id: i64) {
         }
     });
     if current_id() == Some(id) {
+        if let Some(p) = page() {
+            p.st.borrow_mut().chat = None;
+        }
         new_chat(None);
     }
 }

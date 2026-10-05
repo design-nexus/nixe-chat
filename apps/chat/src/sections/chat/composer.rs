@@ -374,6 +374,23 @@ impl Composer {
         self.focus();
     }
 
+    /// Quote `selection` at the end of the message, then `ask` after it.
+    pub fn quote(&self, selection: &str, ask: &str) {
+        let buf = self.text.buffer();
+        let current = widgets::buffer_text(&self.text);
+        let quoted: String = selection.trim().lines().map(|l| format!("> {l}\n")).collect();
+        let mut text = current.trim_end().to_string();
+        if !text.is_empty() {
+            text.push_str("\n\n");
+        }
+        text.push_str(&quoted);
+        text.push('\n');
+        text.push_str(ask);
+        buf.set_text(&text);
+        buf.place_cursor(&buf.end_iter());
+        self.focus();
+    }
+
     pub fn clear_draft_for_switch(&self) {
         self.suggest.popdown();
     }

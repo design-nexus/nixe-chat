@@ -8,44 +8,58 @@ use std::rc::Rc;
 
 use super::{Page, send};
 use crate::markdown::Markdown;
-use crate::ollama::chat::ToolCall;
+use crate::ollama::chat::{Stats, ToolCall};
 use crate::store::{self, Message, Source};
 use crate::{jsonview, tools, util, widgets, window};
 
+/// What a new chat shows: the model, saved prompts and recent chats.
 pub(super) fn empty_state() -> gtk::Box {
-    let b = widgets::vbox(10);
+    let b = widgets::vbox(0);
     b.add_css_class("chat-empty");
     b.set_valign(gtk::Align::Center);
+    b.set_halign(gtk::Align::Center);
     b.set_vexpand(true);
-    let t = widgets::label("What's on your mind?", "chat-empty-title");
-    t.set_xalign(0.5);
-    b.append(&t);
-    let sub = widgets::label("", "dim");
+    b.set_size_request(320, -1);
+    let sub = widgets::label("", "chat-empty-title");
     sub.set_xalign(0.5);
-    sub.add_css_class("chat-empty-model");
+    sub.set_wrap(true);
     b.append(&sub);
     let chips = gtk::FlowBox::new();
     chips.set_selection_mode(gtk::SelectionMode::None);
     chips.set_halign(gtk::Align::Center);
     chips.set_max_children_per_line(3);
+    chips.set_column_spacing(6);
+    chips.set_row_spacing(6);
     chips.add_css_class("prompt-chips");
     b.append(&chips);
+    let recent = widgets::vbox(0);
+    recent.add_css_class("chat-recent");
+    b.append(&recent);
     b
 }
 
 /// Keep "Chatting with …" in step with the picker.
 pub(super) fn refresh_empty(p: &Page) {
-    let Some(sub) = p.empty.first_child().and_then(|t| t.next_sibling()).and_downcast::<gtk::Label>() else { return };
-    let model = p.st.borrow().chat().model.clone();
-    sub.set_text(&if model.is_empty() { String::new() } else { format!("Chatting with {}", util::model_label(&model)) });
+    let Some(sub) = p.empty.first_child().and_downcast::<gtk::Label>() else { return };
+    let (model, temporary) = {
+        let st = p.st.borrow();
+        (st.chat().model.clone(), st.chat().temporary)
+    };
+    let text = match (model.is_empty(), temporary) {
+        (true, _) => "Pick a model to start".to_string(),
+        (false, true) => format!("A temporary chat with {}", util::model_label(&model)),
+        (false, false) => format!("Chatting with {}", util::model_label(&model)),
+    };
+    sub.set_text(&text);
 }
 
 fn fill_empty(p: &Page) {
-    let Some(sub) = p.empty.first_child().and_then(|t| t.next_sibling()).and_downcast::<gtk::Label>() else { return };
     refresh_empty(p);
-    let Some(chips) = sub.next_sibling().and_downcast::<gtk::FlowBox>() else { return };
+    let Some(chips) = p.empty.first_child().and_then(|w| w.next_sibling()).and_downcast::<gtk::FlowBox>() else { return };
     chips.remove_all();
-    for pr in store::prompts().unwrap_or_default().into_iter().take(6) {
+    let prompts = store::prompts().unwrap_or_default();
+    chips.set_visible(!prompts.is_empty());
+    for pr in prompts.into_iter().take(6) {
         let b = gtk::Button::with_label(if pr.title.is_empty() { &pr.command } else { &pr.title });
         b.add_css_class("chip");
         b.set_tooltip_text(Some(&util::clip(&pr.content, 200)));
@@ -56,6 +70,32 @@ fn fill_empty(p: &Page) {
         });
         chips.insert(&b, -1);
     }
+    let Some(recent) = chips.next_sibling().and_downcast::<gtk::Box>() else { return };
+    widgets::clear(&recent);
+    let chats: Vec<store::Chat> = store::chats(false).unwrap_or_default().into_iter().take(5).collect();
+    if chats.is_empty() {
+        recent.set_visible(false);
+        return;
+    }
+    recent.set_visible(true);
+    recent.append(&widgets::label("RECENT", "group-title"));
+    let list = widgets::vbox(0);
+    list.add_css_class("group-list");
+    for c in chats {
+        let b = gtk::Button::new();
+        b.add_css_class("flat");
+        b.add_css_class("recent-row");
+        let row = widgets::hbox(12);
+        let t = widgets::short_label(&c.title, "", pango::EllipsizeMode::End);
+        t.set_hexpand(true);
+        row.append(&t);
+        row.append(&widgets::label(&util::ago(c.updated), "dim"));
+        b.set_child(Some(&row));
+        let id = c.id;
+        b.connect_clicked(move |_| super::open(id));
+        list.append(&b);
+    }
+    recent.append(&list);
 }
 
 /// Rebuild the conversation from the store.
@@ -110,6 +150,7 @@ pub(super) fn render(p: &Rc<Page>) {
         }
         p.column.append(&p.live_box);
     }
+    super::refresh_context(p);
 }
 
 // ---------- User messages ----------
@@ -168,6 +209,10 @@ fn user_bubble(p: &Rc<Page>, m: &Message, all: &[Message]) -> gtk::Widget {
     }));
     let (p2, m2, b2) = (p.clone(), m.clone(), bubble.clone());
     actions.append(&icon_button("document-edit-symbolic", "Edit", move |_| edit_user(&p2, &m2, &b2)));
+    let (p2, id) = (p.clone(), m.id);
+    actions.append(&icon_button("chat-branch-symbolic", "Branch into a new chat from here", move |_| {
+        send::branch(&p2, id)
+    }));
     outer.append(&actions);
     outer.upcast()
 }
@@ -211,6 +256,95 @@ fn edit_user(p: &Rc<Page>, m: &Message, bubble: &gtk::Box) {
             return;
         }
         send::resend_edited(&p2, &m2, text.trim().to_string());
+    });
+    tv.grab_focus();
+}
+
+/// Selecting text in a reply offers Ask and Explain, which quote it into the
+/// message box.
+fn selection_menu(p: &Rc<Page>, body: &gtk::Box) {
+    let click = gtk::GestureClick::new();
+    click.set_button(1);
+    click.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let (p2, b2) = (Rc::downgrade(p), body.downgrade());
+    click.connect_released(move |_, _, x, y| {
+        let (Some(p), Some(body)) = (p2.upgrade(), b2.upgrade()) else { return };
+        // Let the label finish the selection first.
+        gtk::glib::idle_add_local_once(move || {
+            let Some(text) = selected_text(body.upcast_ref()) else { return };
+            let pop = gtk::Popover::new();
+            pop.set_has_arrow(false);
+            pop.set_autohide(true);
+            pop.add_css_class("menu");
+            let row = widgets::hbox(2);
+            for (label, ask) in [("Ask", ""), ("Explain", "Explain this.")] {
+                let b = gtk::Button::with_label(label);
+                b.add_css_class("flat");
+                b.add_css_class("menu-row");
+                let (p3, pop2, t) = (p.clone(), pop.clone(), text.clone());
+                b.connect_clicked(move |_| {
+                    pop2.popdown();
+                    p3.composer.quote(&t, ask);
+                });
+                row.append(&b);
+            }
+            pop.set_child(Some(&row));
+            pop.set_parent(&body);
+            pop.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32, y as i32 + 6, 1, 1)));
+            pop.connect_closed(|pop| {
+                let pop = pop.clone();
+                gtk::glib::idle_add_local_once(move || pop.unparent());
+            });
+            pop.popup();
+        });
+    });
+    body.add_controller(click);
+}
+
+/// The text selected in any label under `w`.
+fn selected_text(w: &gtk::Widget) -> Option<String> {
+    if let Some(l) = w.downcast_ref::<gtk::Label>()
+        && let Some((a, b)) = l.selection_bounds()
+        && a != b
+    {
+        let text: String = l.text().chars().skip(a.min(b) as usize).take((a - b).unsigned_abs() as usize).collect();
+        return (!text.trim().is_empty()).then_some(text);
+    }
+    let mut child = w.first_child();
+    while let Some(c) = child {
+        if let Some(t) = selected_text(&c) {
+            return Some(t);
+        }
+        child = c.next_sibling();
+    }
+    None
+}
+
+/// Edit a reply in place: the corrected text is kept, nothing is regenerated.
+fn edit_reply(p: &Rc<Page>, m: &Message, body: &gtk::Box) {
+    widgets::clear(body);
+    let (sw, tv) = widgets::text_area(&m.content, false, 120);
+    body.append(&sw);
+    let row = widgets::hbox(8);
+    row.set_halign(gtk::Align::End);
+    let note = widgets::label("Later messages build on your version.", "dim");
+    note.add_css_class("small-text");
+    note.set_hexpand(true);
+    row.append(&note);
+    let cancel = gtk::Button::with_label("Cancel");
+    let save = gtk::Button::with_label("Save");
+    save.add_css_class("suggested-action");
+    row.append(&cancel);
+    row.append(&save);
+    body.append(&row);
+    let p2 = p.clone();
+    cancel.connect_clicked(move |_| render(&p2));
+    let (p2, id, tv2) = (p.clone(), m.id, tv.clone());
+    save.connect_clicked(move |_| {
+        let text = widgets::buffer_text(&tv2);
+        if !text.trim().is_empty() {
+            send::save_edited_reply(&p2, id, text.trim_end().to_string());
+        }
     });
     tv.grab_focus();
 }
@@ -295,6 +429,60 @@ fn turn(p: &Rc<Page>, chain: &[Message], all: &[Message], json_mode: bool) -> gt
     answer(p, chain, all, json_mode, None)
 }
 
+/// The reply's token count and speed; a click shows the details.
+fn stats_button(text: &str, first: &Message, last: &Message, tokens: i64) -> gtk::MenuButton {
+    let b = gtk::MenuButton::new();
+    b.add_css_class("flat");
+    b.add_css_class("msg-stats");
+    b.set_label(text);
+    b.set_tooltip_text(Some("Details"));
+    let first_stats = Stats::from_json(&first.extra["stats"], first.tokens, first.tps);
+    let last_stats = Stats::from_json(&last.extra["stats"], last.tokens, last.tps);
+    let total_ms: u64 = if first.id == last.id {
+        last_stats.total_ms
+    } else {
+        first_stats.total_ms + last_stats.total_ms
+    };
+    b.set_create_popup_func(move |m| {
+        let pop = gtk::Popover::new();
+        let v = widgets::vbox(6);
+        v.add_css_class("popover-body");
+        v.add_css_class("stats-popover");
+        let grid = gtk::Grid::new();
+        grid.set_column_spacing(18);
+        grid.set_row_spacing(6);
+        let secs = |ms: u64| if ms >= 10_000 { format!("{:.0} s", ms as f64 / 1000.0) } else { format!("{:.2} s", ms as f64 / 1000.0) };
+        let mut rows: Vec<(&str, String)> = Vec::new();
+        if first_stats.total_ms > 0 {
+            rows.push(("First token", secs(first_stats.first_token_ms())));
+        }
+        if last_stats.tokens_per_sec > 0.0 {
+            rows.push(("Speed", format!("{:.1} tok/s", last_stats.tokens_per_sec)));
+        }
+        rows.push(("Reply", format!("{tokens} tokens")));
+        if last_stats.prompt_tokens > 0 {
+            rows.push(("Prompt", format!("{} tokens", last_stats.prompt_tokens)));
+        }
+        if total_ms > 0 {
+            rows.push(("Total time", secs(total_ms)));
+        }
+        if first_stats.load_ms >= 100 {
+            rows.push(("Loading the model", secs(first_stats.load_ms)));
+        }
+        rows.push(("Ended", last_stats.reason().to_string()));
+        for (i, (k, val)) in rows.iter().enumerate() {
+            grid.attach(&widgets::label(k, "dim"), 0, i as i32, 1, 1);
+            let l = widgets::label(val, "mono");
+            l.set_xalign(1.0);
+            grid.attach(&l, 1, i as i32, 1, 1);
+        }
+        v.append(&grid);
+        pop.set_child(Some(&v));
+        m.set_popover(Some(&pop));
+    });
+    b
+}
+
 /// The messages from `start` down its newest branch, until the next user message.
 fn chain_from(all: &[Message], start: i64) -> Vec<Message> {
     let mut out = Vec::new();
@@ -326,9 +514,17 @@ fn answer(p: &Rc<Page>, chain: &[Message], all: &[Message], json_mode: bool, com
     let tokens: i64 = chain.iter().map(|m| m.tokens).sum();
     if tokens > 0 {
         let text = if last.tps > 0.0 { format!("{tokens} tok · {:.1} tok/s", last.tps) } else { format!("{tokens} tok") };
-        let s = widgets::label(&text, "msg-stats");
-        s.add_css_class("mono");
-        head.append(&s);
+        head.append(&stats_button(&text, first, last, tokens));
+    }
+    if chain.iter().any(|m| m.extra["edited"].as_bool() == Some(true)) {
+        let t = widgets::tag("Edited", "");
+        t.set_tooltip_text(Some("You changed this reply"));
+        head.append(&t);
+    }
+    if let Some(n) = first.extra["trimmed"].as_u64() {
+        let t = widgets::tag(&format!("{n} earlier left out"), "");
+        t.set_tooltip_text(Some("Older messages were left out so the chat fits the model's context"));
+        head.append(&t);
     }
     root.append(&head);
 
@@ -386,6 +582,7 @@ fn answer(p: &Rc<Page>, chain: &[Message], all: &[Message], json_mode: bool, com
         idx += 1;
     }
     root.append(&body);
+    selection_menu(p, &body);
     if !sources.is_empty() {
         root.append(&source_chips(&sources));
     }
@@ -417,6 +614,36 @@ fn answer(p: &Rc<Page>, chain: &[Message], all: &[Message], json_mode: bool, com
             send::generate(&p2, u, vec![model_name.clone()]);
         }
     }));
+    // The reply's last written message: what Edit changes and Continue extends.
+    let tail = chain.iter().rev().find(|m| m.role == "assistant" && !m.content.is_empty() && m.tool_calls.is_empty()).cloned();
+    let last_id = chain.last().map(|l| l.id);
+    let is_tip = !all.iter().any(|x| x.parent.is_some() && x.parent == last_id);
+    if let Some(tail) = tail.clone()
+        && is_tip
+        && compare.is_none()
+    {
+        let stats = Stats::from_json(&tail.extra["stats"], tail.tokens, tail.tps);
+        let (p2, id) = (p.clone(), tail.id);
+        if stats.cut_off() {
+            let b = gtk::Button::with_label("Continue");
+            b.add_css_class("chip");
+            b.set_tooltip_text(Some(if stats.stopped { "Pick up where it stopped" } else { "It hit the length limit; keep writing" }));
+            b.connect_clicked(move |_| send::continue_reply(&p2, id));
+            actions.append(&b);
+        } else {
+            actions.append(&icon_button("media-seek-forward-symbolic", "Continue writing", move |_| send::continue_reply(&p2, id)));
+        }
+    }
+    if let Some(tail) = tail {
+        let (p2, body2) = (p.clone(), body.clone());
+        actions.append(&icon_button("document-edit-symbolic", "Edit this reply", move |_| edit_reply(&p2, &tail, &body2)));
+    }
+    if let Some(end) = chain.last() {
+        let (p2, id) = (p.clone(), end.id);
+        actions.append(&icon_button("chat-branch-symbolic", "Branch into a new chat from here", move |_| {
+            send::branch(&p2, id)
+        }));
+    }
     let t3 = text.clone();
     actions.append(&icon_button("audio-speakers-symbolic", "Read aloud", move |_| crate::voice::speak(&t3)));
     let (p2, first_id) = (p.clone(), first.id);
@@ -438,6 +665,36 @@ fn answer(p: &Rc<Page>, chain: &[Message], all: &[Message], json_mode: bool, com
         actions.append(&use_it);
     }
     root.append(&actions);
+    if is_tip && compare.is_none() {
+        let list: Vec<String> = chain
+            .last()
+            .and_then(|m| m.extra["followups"].as_array())
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        if !list.is_empty() {
+            let flow = gtk::FlowBox::new();
+            flow.add_css_class("followups");
+            flow.set_selection_mode(gtk::SelectionMode::None);
+            flow.set_max_children_per_line(3);
+            flow.set_column_spacing(6);
+            flow.set_row_spacing(6);
+            for q in list {
+                let b = gtk::Button::with_label(&q);
+                b.add_css_class("chip");
+                if let Some(l) = b.child().and_downcast::<gtk::Label>() {
+                    l.set_wrap(true);
+                    l.set_xalign(0.0);
+                }
+                let p2 = p.clone();
+                b.connect_clicked(move |_| {
+                    p2.composer.insert_prompt(&q);
+                    p2.composer.submit();
+                });
+                flow.insert(&b, -1);
+            }
+            root.append(&flow);
+        }
+    }
     root.upcast()
 }
 

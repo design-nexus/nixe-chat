@@ -19,6 +19,17 @@ Chat talks to an Ollama server (on this computer by default). It doesn't run mod
   - Thinking models show their reasoning in a collapsible block.
   - Stop a reply with <kbd>Esc</kbd>, regenerate it, or edit a question and send it
     again. Every version is kept; arrows under a message switch between them.
+  - **Continue** a reply that was stopped or hit the length limit, **edit** a reply so
+    later turns build on your version, or **branch** a new chat from any message.
+  - Select text in a reply to **ask about it** or have it explained.
+  - Click a reply's speed to see its time to first token, token counts, total time and
+    why it ended. The status bar shows the model, its speed and how full the context is,
+    and a meter beside the model picker fills as the chat grows.
+  - When a chat outgrows its context, the oldest messages are left out (or the first
+    exchange is kept, or the chat stops and says so), per chat or by default.
+  - Optional follow-up questions after each reply.
+  - **Temporary chats** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>) aren't saved or
+    searchable and are deleted when you leave them.
   - **Compare:** answer the same message with up to three models side by side, then
     continue with the answer you like.
   - **Attachments:** images for vision models (drop, paste or attach), and text, code or
@@ -35,7 +46,8 @@ Chat talks to an Ollama server (on this computer by default). It doesn't run mod
   - Type <kbd>/</kbd> for saved prompts, <kbd>@</kbd> to switch model, <kbd>#</kbd> to add
     a knowledge collection.
   - Chats get a title automatically, and can be renamed, pinned, tagged, archived,
-    exported as Markdown or JSON, and searched by their full text.
+    exported as Markdown or JSON, and searched by their full text. Pinned chats and
+    folders have their own groups in the sidebar.
   - **Folders:** each folder can set the model, system prompt, tools and knowledge its
     chats start with.
 - **Tools** for models that support them:
@@ -126,6 +138,7 @@ chat [--section ID] [--new] [--quick [--selection | --clipboard]] [--screenshot]
 | <kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd> | Send / new line (swappable in Settings) |
 | <kbd>Esc</kbd> | Stop the reply |
 | <kbd>Ctrl</kbd>+<kbd>N</kbd> | New chat |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> | Temporary chat |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | Search chats (or settings, while Settings is open) |
 | <kbd>Ctrl</kbd>+<kbd>Space</kbd> | Dictate |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Screenshot into the chat |

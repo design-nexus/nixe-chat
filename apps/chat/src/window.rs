@@ -70,6 +70,8 @@ pub fn init() {
     }
     theme::install();
     install_icons();
+    // Temporary chats left behind by a crash.
+    let _ = crate::store::purge_temporary();
     models::refresh();
     let p = prefs::get();
     if p.mcp_servers.iter().any(|s| s.enabled) {
@@ -123,6 +125,7 @@ fn install_icons() {
         ("chat-models-symbolic.svg", include_str!("../data/icons/chat-models-symbolic.svg")),
         ("chat-store-symbolic.svg", include_str!("../data/icons/chat-store-symbolic.svg")),
         ("chat-stats-symbolic.svg", include_str!("../data/icons/chat-stats-symbolic.svg")),
+        ("chat-branch-symbolic.svg", include_str!("../data/icons/chat-branch-symbolic.svg")),
         ("io.github.design_nexus.Chat.svg", include_str!("../data/io.github.design_nexus.Chat.svg")),
     ];
     let dir = crate::paths::cache_dir().join("icons");
@@ -253,6 +256,10 @@ fn build(app: &gtk::Application) {
     window.set_child(Some(&overlay));
 
     install_keys(&window, &search);
+    window.connect_close_request(|_| {
+        sections::chat::discard_temporary();
+        glib::Propagation::Proceed
+    });
 
     // Narrow windows (a tiled half-screen) get an icon-only sidebar.
     let apply_width = {
@@ -330,6 +337,21 @@ fn top_bar(window: &gtk::ApplicationWindow) -> (gtk::Box, gtk::Label, gtk::Searc
         e.set_visible(false);
     });
 
+    let temp = gtk::ToggleButton::new();
+    temp.set_icon_name("view-conceal-symbolic");
+    temp.add_css_class("flat");
+    temp.add_css_class("bar-button");
+    temp.add_css_class("temp-toggle");
+    temp.set_valign(gtk::Align::Center);
+    temp.set_tooltip_text(Some("Temporary chat: not saved (Ctrl+Shift+N)"));
+    temp.connect_toggled(|b| {
+        if !TEMP_SYNC.with(|s| s.get()) {
+            sections::chat::set_temporary(b.is_active());
+        }
+    });
+    bar.append(&temp);
+    TEMP_TOGGLE.with(|t| *t.borrow_mut() = Some(temp));
+
     let gear = widgets::bar_button("emblem-system-symbolic", "Settings (Ctrl+,)");
     gear.connect_clicked(|_| settings_dialog::open());
     bar.append(&gear);
@@ -338,6 +360,25 @@ fn top_bar(window: &gtk::ApplicationWindow) -> (gtk::Box, gtk::Label, gtk::Searc
     close.connect_clicked(move |_| w.close());
     bar.append(&close);
     (bar, crumb, search)
+}
+
+thread_local! {
+    static TEMP_TOGGLE: RefCell<Option<gtk::ToggleButton>> = const { RefCell::new(None) };
+    /// Set while the toggle is updated from the chat, so it doesn't act.
+    static TEMP_SYNC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Show whether the chat on screen is temporary.
+pub fn set_temporary_toggle(on: bool) {
+    TEMP_TOGGLE.with(|t| {
+        if let Some(b) = t.borrow().as_ref()
+            && b.is_active() != on
+        {
+            TEMP_SYNC.with(|s| s.set(true));
+            b.set_active(on);
+            TEMP_SYNC.with(|s| s.set(false));
+        }
+    });
 }
 
 /// Show the chat search. In the icon-only sidebar the results have nowhere to
@@ -456,6 +497,7 @@ pub const SHORTCUTS: &[(&[&str], &str)] = &[
     (&["Enter"], "Send (Shift+Enter for a new line; swappable in Settings)"),
     (&["Esc"], "Stop the reply, clear the search, or close"),
     (&["Ctrl", "N"], "New chat"),
+    (&["Ctrl", "Shift", "N"], "Temporary chat, not saved"),
     (&["Ctrl", "F"], "Search chats"),
     (&["Ctrl", "Space"], "Dictate"),
     (&["Ctrl", "Shift", "S"], "Screenshot into the chat"),
@@ -531,6 +573,10 @@ fn install_keys(window: &gtk::ApplicationWindow, search: &gtk::SearchEntry) {
             }
             gdk::Key::question if !ctrl && !typing => {
                 show_shortcuts();
+                done
+            }
+            gdk::Key::N if ctrl && shift => {
+                sections::chat::set_temporary(!sections::chat::is_temporary());
                 done
             }
             gdk::Key::n if ctrl => {

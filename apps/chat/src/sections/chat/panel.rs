@@ -129,6 +129,17 @@ pub(super) fn fill(p: &Rc<Page>) {
     b.append(&dd);
     b.append(&widgets::label("More context remembers more, and uses more memory.", "panel-note"));
 
+    b.append(&heading("When the context is full"));
+    let opts = widgets::opts(crate::sections::settings::OVERFLOW);
+    let dd = widgets::dropdown(&opts, pa.overflow.as_deref().unwrap_or(&pr.overflow));
+    let p2 = p.clone();
+    dd.connect_selected_notify(move |d| {
+        if let Some((v, _)) = opts.get(d.selected() as usize) {
+            with_params(&p2, |pa| pa.overflow = Some(v.clone()));
+        }
+    });
+    b.append(&dd);
+
     b.append(&heading("Seed"));
     let seed = gtk::Entry::new();
     seed.add_css_class("mono");

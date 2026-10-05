@@ -49,10 +49,70 @@ impl Msg {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Stats {
+    /// Tokens written.
     pub tokens: u64,
     pub tokens_per_sec: f64,
+    /// Tokens read: the prompt, history and attachments.
+    pub prompt_tokens: u64,
+    pub load_ms: u64,
+    pub prompt_ms: u64,
+    pub total_ms: u64,
+    /// Ollama's reason for stopping: "stop", "length", …
+    pub done_reason: String,
+    /// The user stopped the reply.
+    pub stopped: bool,
+}
+
+impl Stats {
+    pub fn to_json(&self) -> Value {
+        json!({
+            "prompt_tokens": self.prompt_tokens,
+            "load_ms": self.load_ms,
+            "prompt_ms": self.prompt_ms,
+            "total_ms": self.total_ms,
+            "done_reason": self.done_reason,
+            "stopped": self.stopped,
+        })
+    }
+
+    /// Read back what `to_json` stored, with `tokens`/`tps` from the message row.
+    pub fn from_json(v: &Value, tokens: i64, tps: f64) -> Stats {
+        Stats {
+            tokens: tokens.max(0) as u64,
+            tokens_per_sec: tps,
+            prompt_tokens: v["prompt_tokens"].as_u64().unwrap_or(0),
+            load_ms: v["load_ms"].as_u64().unwrap_or(0),
+            prompt_ms: v["prompt_ms"].as_u64().unwrap_or(0),
+            total_ms: v["total_ms"].as_u64().unwrap_or(0),
+            done_reason: v["done_reason"].as_str().unwrap_or("").to_string(),
+            stopped: v["stopped"].as_bool().unwrap_or(false),
+        }
+    }
+
+    /// Time from sending to the first token: loading the model and reading the prompt.
+    pub fn first_token_ms(&self) -> u64 {
+        self.load_ms + self.prompt_ms
+    }
+
+    /// Why the reply ended, in words.
+    pub fn reason(&self) -> &'static str {
+        if self.stopped {
+            "You stopped it"
+        } else if self.done_reason == "length" {
+            "Hit the length limit"
+        } else if self.done_reason.is_empty() {
+            "Unknown"
+        } else {
+            "Finished"
+        }
+    }
+
+    /// The reply ended before the model was done.
+    pub fn cut_off(&self) -> bool {
+        self.stopped || self.done_reason == "length"
+    }
 }
 
 pub struct Request {
@@ -85,6 +145,8 @@ pub enum Event {
         calls: Vec<ToolCall>,
         stats: Stats,
     },
+    /// Older messages were left out to fit the context (how many).
+    Trimmed(usize),
     ToolStart(ToolCall),
     ToolResult {
         call: ToolCall,
@@ -113,8 +175,9 @@ pub async fn run(mut req: Request, tx: async_channel::Sender<Event>, cancel: Can
 async fn run_inner(req: &mut Request, tx: &async_channel::Sender<Event>, cancel: &Cancel) -> Result<()> {
     for _ in 0..req.max_rounds.max(1) {
         let _ = tx.send(Event::RoundStart).await;
-        let (content, thinking, calls, stats) = stream_once(req, tx, cancel).await?;
+        let (content, thinking, calls, mut stats) = stream_once(req, tx, cancel).await?;
         let stopped = cancel.load(Ordering::Relaxed);
+        stats.stopped = stopped;
         let _ = tx
             .send(Event::RoundEnd {
                 content: content.clone(),
@@ -299,7 +362,17 @@ fn parse_calls(m: &Value) -> Vec<ToolCall> {
 fn parse_stats(v: &Value) -> Stats {
     let tokens = v["eval_count"].as_u64().unwrap_or(0);
     let nanos = v["eval_duration"].as_u64().unwrap_or(0);
-    Stats { tokens, tokens_per_sec: if nanos == 0 || tokens < 2 { 0.0 } else { tokens as f64 / (nanos as f64 / 1e9) } }
+    let ms = |k: &str| v[k].as_u64().unwrap_or(0) / 1_000_000;
+    Stats {
+        tokens,
+        tokens_per_sec: if nanos == 0 || tokens < 2 { 0.0 } else { tokens as f64 / (nanos as f64 / 1e9) },
+        prompt_tokens: v["prompt_eval_count"].as_u64().unwrap_or(0),
+        load_ms: ms("load_duration"),
+        prompt_ms: ms("prompt_eval_duration"),
+        total_ms: ms("total_duration"),
+        done_reason: v["done_reason"].as_str().unwrap_or("").to_string(),
+        stopped: false,
+    }
 }
 
 #[cfg(test)]
@@ -342,7 +415,16 @@ mod tests {
 
     #[test]
     fn stats_from_done_chunk() {
-        let s = parse_stats(&json!({ "eval_count": 100, "eval_duration": 2_000_000_000u64 }));
+        let s = parse_stats(&json!({
+            "eval_count": 100, "eval_duration": 2_000_000_000u64, "prompt_eval_count": 812,
+            "prompt_eval_duration": 300_000_000u64, "load_duration": 1_200_000_000u64,
+            "total_duration": 3_600_000_000u64, "done_reason": "length",
+        }));
+        assert_eq!(s.prompt_tokens, 812);
+        assert_eq!(s.first_token_ms(), 1500);
+        assert_eq!(s.total_ms, 3600);
+        assert!(s.cut_off());
+        assert_eq!(Stats::from_json(&s.to_json(), 100, s.tokens_per_sec), s);
         assert_eq!(s.tokens, 100);
         assert!((s.tokens_per_sec - 50.0).abs() < 1e-9);
     }

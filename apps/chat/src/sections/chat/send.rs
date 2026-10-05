@@ -33,6 +33,9 @@ pub struct Stream {
     current: Cell<i64>,
     /// The stream whose answer the chat continues from.
     primary: bool,
+    /// Continuing a reply: its text and token count so far.
+    prefix: String,
+    prefix_tokens: i64,
 }
 
 impl Stream {
@@ -134,6 +137,60 @@ fn reload(p: &Page) {
     st.all = all;
     if let Some(c) = chat {
         st.chat = Some(c);
+    }
+}
+
+/// Have the model keep writing a reply from where it ended. The reply goes in
+/// as the last message, which Ollama continues instead of answering.
+pub(super) fn continue_reply(p: &Rc<Page>, msg_id: i64) {
+    let Some(chat_id) = p.st.borrow().id() else { return };
+    if super::streaming(Some(chat_id)) {
+        window::toast("A reply is already being written");
+        return;
+    }
+    let (m, question) = {
+        let st = p.st.borrow();
+        let Some(m) = st.all.iter().find(|m| m.id == msg_id).cloned() else { return };
+        let path = store::path_to(&st.all, msg_id);
+        let q = path.iter().rev().find(|m| m.role == "user").map(|m| m.content.clone()).unwrap_or_default();
+        (m, q)
+    };
+    let mut prepared = prepare(p, &m.model, msg_id);
+    // Just more text: no tools, no fresh search, no new reasoning.
+    prepared.request.tools.clear();
+    prepared.request.max_rounds = 1;
+    prepared.request.think = prepared.request.think.map(|_| false);
+    prepared.pre_search = None;
+    prepared.rag_query = question;
+    let stream = start_prepared(chat_id, &m.model, prepared, msg_id, true, (m.content.clone(), m.tokens));
+    super::add_stream(stream);
+    p.follow.set(true);
+    render(p);
+    super::scroll_to_bottom_now(&p.scroller);
+    p.composer.set_streaming(true);
+}
+
+/// Replace a reply's text with the user's correction; later turns build on it.
+pub(super) fn save_edited_reply(p: &Rc<Page>, msg_id: i64, text: String) {
+    if let Ok(Some(mut m)) = store::message(msg_id) {
+        m.content = text;
+        set_extra(&mut m.extra, "edited", json!(true));
+        let _ = store::finish_message(&m);
+    }
+    reload(p);
+    render(p);
+}
+
+/// Start a new chat from the conversation up to `msg_id`.
+pub(super) fn branch(p: &Rc<Page>, msg_id: i64) {
+    let Some(chat_id) = p.st.borrow().id() else { return };
+    match store::branch_chat(chat_id, msg_id) {
+        Ok(id) => {
+            hub::emit(&hub::CHATS);
+            super::open(id);
+            window::toast("Branched into a new chat");
+        }
+        Err(e) => window::toast(&format!("Couldn't branch: {e}")),
     }
 }
 
@@ -255,10 +312,31 @@ struct Prepared {
     /// Search first and add the results (for models that can't call tools).
     pre_search: Option<String>,
     clipboard: Option<String>,
+    /// Tokens the model can take in, and what to do past that.
+    ctx_limit: usize,
+    overflow: String,
+    chars_per_token: f64,
 }
 
 fn start(p: &Rc<Page>, chat_id: i64, model: &str, user_id: i64, first_row: i64, primary: bool) -> Rc<Stream> {
+    let prepared = prepare(p, model, user_id);
+    start_prepared(chat_id, model, prepared, first_row, primary, (String::new(), 0))
+}
+
+/// Run `prepared`, writing into `first_row`. `prefix` is the reply so far
+/// (text and tokens) when continuing one.
+fn start_prepared(
+    chat_id: i64,
+    model: &str,
+    prepared: Prepared,
+    first_row: i64,
+    primary: bool,
+    prefix: (String, i64),
+) -> Rc<Stream> {
     let live = Live::new(model);
+    if !prefix.0.is_empty() {
+        live.delta(&prefix.0, "");
+    }
     let stream = Rc::new(Stream {
         chat: chat_id,
         model: model.to_string(),
@@ -268,8 +346,9 @@ fn start(p: &Rc<Page>, chat_id: i64, model: &str, user_id: i64, first_row: i64, 
         rows: RefCell::new(vec![first_row]),
         current: Cell::new(first_row),
         primary,
+        prefix: prefix.0,
+        prefix_tokens: prefix.1,
     });
-    let prepared = prepare(p, model, user_id);
     let cancel = stream.cancel.clone();
     let s2 = stream.clone();
     let mut round = 0usize;
@@ -404,7 +483,78 @@ fn prepare(p: &Page, model: &str, user_id: i64) -> Prepared {
         vision: can("vision"),
         pre_search,
         clipboard,
+        ctx_limit: context_limit(&chat) as usize,
+        overflow: chat.params.overflow.clone().unwrap_or_else(|| pr.overflow.clone()),
+        chars_per_token: chars_per_token(&path),
     }
+}
+
+/// How many tokens this chat's model takes in: the chat's context length (or
+/// the default), never more than the model supports.
+pub(crate) fn context_limit(chat: &Chat) -> i64 {
+    let asked = chat.params.num_ctx.unwrap_or(prefs::get().num_ctx);
+    match models::info(&chat.model).and_then(|i| i.context_length) {
+        Some(max) if max > 0 => asked.min(max as i64),
+        _ => asked,
+    }
+}
+
+/// Tokens the last reply on `path` used: what it read plus what it wrote.
+pub(crate) fn context_used(path: &[Message]) -> Option<u64> {
+    let m = path.iter().rev().find(|m| m.role == "assistant" && m.extra["stats"]["prompt_tokens"].as_u64().unwrap_or(0) > 0)?;
+    Some(m.extra["stats"]["prompt_tokens"].as_u64().unwrap_or(0) + m.tokens.max(0) as u64)
+}
+
+/// Characters per token for this conversation, learned from the last reply's
+/// prompt size; about 3.5 when there's nothing to learn from.
+fn chars_per_token(path: &[Message]) -> f64 {
+    let Some(i) = path.iter().rposition(|m| m.role == "assistant" && m.extra["stats"]["prompt_tokens"].as_u64().unwrap_or(0) > 0)
+    else {
+        return 3.5;
+    };
+    let tokens = path[i].extra["stats"]["prompt_tokens"].as_u64().unwrap_or(0) as f64;
+    let chars: usize = path[..i].iter().map(|m| m.content.len() + m.files.iter().map(|f| f.chars).sum::<usize>()).sum();
+    if chars < 2000 {
+        return 3.5;
+    }
+    (chars as f64 / tokens).clamp(2.0, 6.0)
+}
+
+/// Rough token count of a message as sent.
+fn estimate(m: &Msg, chars_per_token: f64) -> usize {
+    (m.content.len() as f64 / chars_per_token) as usize + m.images.len() * 768 + 8
+}
+
+/// Fit `messages` (system prompt first, newest question last) into `budget`
+/// tokens. "rolling" drops the oldest turns, "keep_first" keeps the first
+/// exchange and drops the ones after it, "stop" changes nothing. Returns how
+/// many messages were left out, or the estimated size when it can't fit.
+fn fit_context(messages: &mut Vec<Msg>, budget: usize, policy: &str, chars_per_token: f64) -> Result<usize, usize> {
+    let total = |ms: &[Msg]| ms.iter().map(|m| estimate(m, chars_per_token)).sum::<usize>();
+    let size = total(messages);
+    if size <= budget {
+        return Ok(0);
+    }
+    if policy == "stop" {
+        return Err(size);
+    }
+    // Turns start at each user message; the system prompt and the last turn stay.
+    let starts: Vec<usize> = messages.iter().enumerate().filter(|(_, m)| m.role == "user").map(|(i, _)| i).collect();
+    if starts.len() < 2 {
+        return Err(size);
+    }
+    let keep_from = if policy == "keep_first" { 1 } else { 0 };
+    let mut dropped = 0;
+    // Drop whole turns, oldest first (after the kept first exchange).
+    for t in keep_from..starts.len() - 1 {
+        if total(messages) <= budget {
+            break;
+        }
+        let (a, b) = (starts[t] - dropped, starts[t + 1] - dropped);
+        messages.drain(a..b);
+        dropped += b - a;
+    }
+    if total(messages) <= budget { Ok(dropped) } else { Err(total(messages)) }
 }
 
 /// Build the final messages (system prompt, memories, location, documents,
@@ -527,6 +677,24 @@ async fn run(mut p: Prepared, tx: async_channel::Sender<Event>, cancel: Cancel) 
     if !system.trim().is_empty() {
         messages.insert(0, Msg::new("system", system.trim()));
     }
+    // Leave room for the reply.
+    let budget = p.ctx_limit.saturating_sub((p.ctx_limit / 4).clamp(512, 2048));
+    match fit_context(&mut messages, budget, &p.overflow, p.chars_per_token) {
+        Ok(0) => {}
+        Ok(n) => {
+            let _ = tx.send(Event::Trimmed(n)).await;
+        }
+        Err(size) => {
+            let msg = format!(
+                "This chat (about {} tokens) is longer than its context of {} tokens. Branch a new chat from a recent message, raise the context length, or let older messages drop in this chat's settings.",
+                util::count(size as u64),
+                util::count(p.ctx_limit as u64)
+            );
+            let _ = tx.send(Event::Error(msg)).await;
+            let _ = tx.send(Event::Done).await;
+            return;
+        }
+    }
     p.request.messages = messages;
     chat::run(p.request, tx, cancel).await;
 }
@@ -560,16 +728,29 @@ fn on_event(s: &Rc<Stream>, ev: Event, round: &mut usize) {
         Event::RoundEnd { content, thinking, calls, stats } => {
             s.live.round_end(&stats);
             if let Ok(Some(mut m)) = store::message(s.current.get()) {
-                m.content = content;
-                m.thinking = thinking;
+                let continued = !s.prefix.is_empty() && s.current.get() == s.rows.borrow()[0];
+                m.content = if continued { format!("{}{content}", s.prefix) } else { content };
+                if !continued {
+                    m.thinking = thinking;
+                }
                 m.tool_calls = calls;
-                m.tokens = stats.tokens as i64;
+                m.tokens = stats.tokens as i64 + if continued { s.prefix_tokens } else { 0 };
                 m.tps = stats.tokens_per_sec;
+                set_extra(&mut m.extra, "stats", stats.to_json());
                 let secs = s.live.think_secs.get();
                 if secs > 0.0 {
                     set_extra(&mut m.extra, "think_secs", json!(secs));
                 }
                 let _ = store::finish_message(&m);
+            }
+        }
+        Event::Trimmed(n) => {
+            if let Ok(Some(mut m)) = store::message(s.current.get()) {
+                set_extra(&mut m.extra, "trimmed", json!(n));
+                let _ = store::finish_message(&m);
+            }
+            if s.primary {
+                window::toast(&format!("Left out {n} earlier message{} to fit the context", if n == 1 { "" } else { "s" }));
             }
         }
         Event::ToolStart(call) => s.live.tool_start(&call),
@@ -652,8 +833,64 @@ fn finished(s: &Rc<Stream>) {
             if pr.auto_read && !text.trim().is_empty() && !s.cancel.load(Ordering::Relaxed) {
                 voice::speak(&text);
             }
+            if pr.followups && !text.trim().is_empty() && !s.cancel.load(Ordering::Relaxed) {
+                suggest_followups(s.chat, s.last(), &s.model);
+            }
         }
     }
+}
+
+/// Ask the model for a few follow-up questions and keep them on the reply.
+fn suggest_followups(chat_id: i64, reply: i64, model: &str) {
+    let all = store::messages(chat_id).unwrap_or_default();
+    let path = store::path_to(&all, reply);
+    if path.last().is_some_and(|m| m.error().is_some()) {
+        return;
+    }
+    let convo: String = path
+        .iter()
+        .filter(|m| (m.role == "user" || m.role == "assistant") && !m.content.is_empty())
+        .rev()
+        .take(4)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .map(|m| format!("{}: {}\n\n", if m.role == "user" { "User" } else { "Assistant" }, util::clip(&m.content, 1500)))
+        .collect();
+    let prompt = format!(
+        "{convo}Suggest three short follow-up questions the user might ask next, in the user's voice. Reply with the three questions only, one per line, with no numbering."
+    );
+    let (conn, model) = (Conn::current(), model.to_string());
+    rt::spawn(async move { api::complete(&conn, &model, json!([{ "role": "user", "content": prompt }])).await }, move |r| {
+        let Ok(text) = r else { return };
+        let list = parse_followups(&text);
+        if list.is_empty() {
+            return;
+        }
+        if let Ok(Some(mut m)) = store::message(reply) {
+            set_extra(&mut m.extra, "followups", json!(list));
+            let _ = store::finish_message(&m);
+        }
+        if let Some(p) = super::page()
+            && p.st.borrow().id() == Some(chat_id)
+            && !super::streaming(Some(chat_id))
+        {
+            reload(&p);
+            render(&p);
+        }
+    });
+}
+
+/// Up to three questions from the model's reply: one per line, bullets and
+/// numbers removed.
+fn parse_followups(text: &str) -> Vec<String> {
+    let text = text.rsplit("</think>").next().unwrap_or(text);
+    text.lines()
+        .map(|l| l.trim().trim_start_matches(|c: char| c.is_ascii_digit() || "-*•.) ".contains(c)).trim().trim_matches('"'))
+        .filter(|l| l.len() > 3 && l.len() <= 140)
+        .take(3)
+        .map(String::from)
+        .collect()
 }
 
 /// Name a new chat after its first exchange.
@@ -662,7 +899,7 @@ fn maybe_title(chat_id: i64) {
         return;
     }
     let Ok(Some(chat)) = store::chat(chat_id) else { return };
-    if chat.title != "New chat" {
+    if chat.title != "New chat" || chat.temporary {
         return;
     }
     let all = store::messages(chat_id).unwrap_or_default();
@@ -702,6 +939,40 @@ fn clean_title(t: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fits_the_context() {
+        let m = |role: &str, n: usize| Msg::new(role, "x".repeat(n));
+        let chat = || {
+            vec![m("system", 35), m("user", 350), m("assistant", 350), m("user", 350), m("assistant", 350), m("user", 35)]
+        };
+        // Everything fits: nothing changes.
+        let mut ms = chat();
+        assert_eq!(fit_context(&mut ms, 10_000, "rolling", 3.5), Ok(0));
+        assert_eq!(ms.len(), 6);
+        // Rolling drops the first exchange.
+        let mut ms = chat();
+        assert_eq!(fit_context(&mut ms, 260, "rolling", 3.5), Ok(2));
+        assert_eq!(ms.iter().map(|x| x.role.as_str()).collect::<Vec<_>>(), ["system", "user", "assistant", "user"]);
+        // Keep-first drops the middle instead.
+        let mut ms = chat();
+        assert_eq!(fit_context(&mut ms, 260, "keep_first", 3.5), Ok(2));
+        assert_eq!(ms[1].content.len(), 350);
+        assert_eq!(ms.len(), 4);
+        // Stop changes nothing and reports the size.
+        let mut ms = chat();
+        assert!(fit_context(&mut ms, 250, "stop", 3.5).is_err());
+        assert_eq!(ms.len(), 6);
+        // Too big even with one turn left.
+        let mut ms = chat();
+        assert!(fit_context(&mut ms, 10, "rolling", 3.5).is_err());
+    }
+
+    #[test]
+    fn parses_followups() {
+        let q = parse_followups("<think>hm</think>\n1. How fast is it?\n- What does it cost?\n\n\"Can I try it?\"\nAnd one more?");
+        assert_eq!(q, ["How fast is it?", "What does it cost?", "Can I try it?"]);
+    }
 
     #[test]
     fn cleans_titles() {

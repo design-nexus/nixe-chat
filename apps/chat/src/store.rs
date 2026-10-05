@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS chats (
     model TEXT NOT NULL DEFAULT '', system TEXT NOT NULL DEFAULT '', params TEXT NOT NULL DEFAULT '{}',
     schema TEXT NOT NULL DEFAULT '', compare TEXT NOT NULL DEFAULT '', knowledge TEXT NOT NULL DEFAULT '',
     tags TEXT NOT NULL DEFAULT '', pinned INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0,
-    host TEXT NOT NULL DEFAULT '', leaf INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL);
+    host TEXT NOT NULL DEFAULT '', leaf INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL,
+    temporary INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY, chat INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE, parent INTEGER,
     role TEXT NOT NULL, content TEXT NOT NULL DEFAULT '', thinking TEXT NOT NULL DEFAULT '',
@@ -62,7 +63,21 @@ fn open() -> Result<Connection> {
     let db = Connection::open(path)?;
     db.busy_timeout(std::time::Duration::from_secs(5))?;
     db.execute_batch(SCHEMA)?;
+    migrate(&db)?;
     Ok(db)
+}
+
+/// Bring a database from an older version up to date.
+fn migrate(db: &Connection) -> Result<()> {
+    let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if version < 1 {
+        // Temporary chats (databases made before them lack the column).
+        if db.prepare("SELECT temporary FROM chats LIMIT 0").is_err() {
+            db.execute_batch("ALTER TABLE chats ADD COLUMN temporary INTEGER NOT NULL DEFAULT 0")?;
+        }
+        db.execute_batch("PRAGMA user_version = 1")?;
+    }
+    Ok(())
 }
 
 /// Run `f` with this thread's connection (each thread opens its own).
@@ -87,6 +102,8 @@ pub struct Params {
     pub num_ctx: Option<i64>,
     pub seed: Option<i64>,
     pub think: Option<bool>,
+    /// What to do when the chat outgrows its context; `None` uses the default.
+    pub overflow: Option<String>,
     /// Tools for this chat; `None` uses the defaults from Settings.
     pub tools: Option<Vec<String>>,
     /// Ask for JSON (with `schema` when set).
@@ -112,6 +129,8 @@ pub struct Chat {
     pub leaf: i64,
     pub created: i64,
     pub updated: i64,
+    /// Not kept: deleted when you leave it.
+    pub temporary: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -183,7 +202,7 @@ fn join_ids(ids: &[i64]) -> String {
 }
 
 const CHAT_COLS: &str =
-    "id, title, folder, model, system, params, schema, compare, knowledge, tags, pinned, archived, host, leaf, created, updated";
+    "id, title, folder, model, system, params, schema, compare, knowledge, tags, pinned, archived, host, leaf, created, updated, temporary";
 
 fn chat_row(r: &rusqlite::Row) -> rusqlite::Result<Chat> {
     Ok(Chat {
@@ -203,6 +222,7 @@ fn chat_row(r: &rusqlite::Row) -> rusqlite::Result<Chat> {
         leaf: r.get(13)?,
         created: r.get(14)?,
         updated: r.get(15)?,
+        temporary: r.get(16)?,
     })
 }
 
@@ -249,7 +269,7 @@ pub fn chat(id: i64) -> Result<Option<Chat>> {
 /// Every chat that isn't archived (or only archived ones), newest first.
 pub fn chats(archived: bool) -> Result<Vec<Chat>> {
     with(|db| {
-        let mut st = db.prepare(&format!("SELECT {CHAT_COLS} FROM chats WHERE archived = ?1 ORDER BY updated DESC"))?;
+        let mut st = db.prepare(&format!("SELECT {CHAT_COLS} FROM chats WHERE archived = ?1 AND temporary = 0 ORDER BY updated DESC"))?;
         Ok(st.query_map([archived], chat_row)?.collect::<rusqlite::Result<_>>()?)
     })
 }
@@ -258,7 +278,7 @@ pub fn save_chat(c: &Chat) -> Result<()> {
     with(|db| {
         db.execute(
             "UPDATE chats SET title=?2, folder=?3, model=?4, system=?5, params=?6, schema=?7, compare=?8, knowledge=?9,
-             tags=?10, pinned=?11, archived=?12, host=?13, leaf=?14 WHERE id=?1",
+             tags=?10, pinned=?11, archived=?12, host=?13, leaf=?14, temporary=?15 WHERE id=?1",
             params![
                 c.id,
                 c.title,
@@ -273,7 +293,8 @@ pub fn save_chat(c: &Chat) -> Result<()> {
                 c.pinned,
                 c.archived,
                 c.host,
-                c.leaf
+                c.leaf,
+                c.temporary
             ],
         )?;
         Ok(())
@@ -292,6 +313,55 @@ pub fn set_leaf(chat: i64, leaf: i64) -> Result<()> {
         db.execute("UPDATE chats SET leaf = ?2 WHERE id = ?1", params![chat, leaf])?;
         Ok(())
     })
+}
+
+/// A new chat holding `chat`'s conversation up to and including `msg`, with
+/// the same settings. Attachments are shared by path. Returns the new chat.
+pub fn branch_chat(chat: i64, msg: i64) -> Result<i64> {
+    let Some(src) = self::chat(chat)? else { anyhow::bail!("no such chat") };
+    let all = messages(chat)?;
+    let path = path_to(&all, msg);
+    let id = create_chat(&src.model, src.folder, &src.host)?;
+    let mut copy = src.clone();
+    copy.id = id;
+    copy.title = format!("{} (branch)", src.title);
+    copy.pinned = false;
+    copy.archived = false;
+    // A branch is kept, even from a temporary chat.
+    copy.temporary = false;
+    let mut parent: Option<i64> = None;
+    for m in &path {
+        let new_id = add_message(NewMessage {
+            chat: id,
+            parent,
+            role: &m.role,
+            content: &m.content,
+            model: &m.model,
+            images: &m.images,
+            files: &m.files,
+            extra: m.extra.clone(),
+        })?;
+        let mut done = m.clone();
+        done.id = new_id;
+        done.chat = id;
+        finish_message(&done)?;
+        parent = Some(new_id);
+    }
+    copy.leaf = parent.unwrap_or(0);
+    save_chat(&copy)?;
+    Ok(id)
+}
+
+/// Delete every temporary chat (left over from a crash, or on quitting).
+pub fn purge_temporary() -> Result<()> {
+    let ids: Vec<i64> = with(|db| {
+        let mut st = db.prepare("SELECT id FROM chats WHERE temporary = 1")?;
+        Ok(st.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?)
+    })?;
+    for id in ids {
+        delete_chat(id)?;
+    }
+    Ok(())
 }
 
 pub fn delete_chat(id: i64) -> Result<()> {
@@ -454,13 +524,13 @@ pub fn search(q: &str) -> Result<Vec<Hit>> {
     with(|db| {
         let mut hits: Vec<Hit> = Vec::new();
         let like = format!("%{}%", q.trim());
-        let mut st = db.prepare("SELECT id, title FROM chats WHERE title LIKE ?1 ORDER BY updated DESC LIMIT 50")?;
+        let mut st = db.prepare("SELECT id, title FROM chats WHERE title LIKE ?1 AND temporary = 0 ORDER BY updated DESC LIMIT 50")?;
         for r in st.query_map([&like], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?.flatten() {
             hits.push(Hit { chat: r.0, title: r.1, snippet: String::new() });
         }
         let mut st = db.prepare(
             "SELECT fts.chat, chats.title, snippet(fts, 0, '\u{1}', '\u{2}', '…', 12) FROM fts
-             JOIN chats ON chats.id = fts.chat WHERE fts MATCH ?1 ORDER BY rank LIMIT 100",
+             JOIN chats ON chats.id = fts.chat WHERE fts MATCH ?1 AND chats.temporary = 0 ORDER BY rank LIMIT 100",
         )?;
         for r in st.query_map([&fq], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)))?.flatten() {
             if let Some(h) = hits.iter_mut().find(|h| h.chat == r.0) {
@@ -784,12 +854,67 @@ pub mod tests {
         DB.with(|cell| {
             let db = Connection::open_in_memory().unwrap();
             db.execute_batch(SCHEMA).unwrap();
+            migrate(&db).unwrap();
             *cell.borrow_mut() = Some(db);
         });
     }
 
     fn msg(chat: i64, parent: Option<i64>, role: &str, content: &str) -> i64 {
         add_message(NewMessage { chat, parent, role, content, model: "m", images: &[], files: &[], extra: Value::Null }).unwrap()
+    }
+
+    #[test]
+    fn migrates_old_databases() {
+        let db = Connection::open_in_memory().unwrap();
+        // A chats table from before temporary chats.
+        db.execute_batch(
+            "CREATE TABLE chats (id INTEGER PRIMARY KEY, title TEXT NOT NULL DEFAULT '', folder INTEGER, model TEXT NOT NULL DEFAULT '',
+             system TEXT NOT NULL DEFAULT '', params TEXT NOT NULL DEFAULT '{}', schema TEXT NOT NULL DEFAULT '',
+             compare TEXT NOT NULL DEFAULT '', knowledge TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '',
+             pinned INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0, host TEXT NOT NULL DEFAULT '',
+             leaf INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL);
+             INSERT INTO chats (title, created, updated) VALUES ('old', 1, 1);",
+        )
+        .unwrap();
+        db.execute_batch(SCHEMA).unwrap();
+        migrate(&db).unwrap();
+        migrate(&db).unwrap();
+        let t: i64 = db.query_row("SELECT temporary FROM chats", [], |r| r.get(0)).unwrap();
+        assert_eq!(t, 0);
+    }
+
+    #[test]
+    fn temporary_chats_stay_out_of_lists() {
+        scratch();
+        let keep = create_chat("m", None, "").unwrap();
+        let temp = create_chat("m", None, "").unwrap();
+        let mut c = chat(temp).unwrap().unwrap();
+        c.temporary = true;
+        c.title = "secret plans".into();
+        save_chat(&c).unwrap();
+        msg(temp, None, "user", "secret plans");
+        assert_eq!(chats(false).unwrap().iter().map(|c| c.id).collect::<Vec<_>>(), [keep]);
+        assert!(search("secret").unwrap().is_empty());
+        purge_temporary().unwrap();
+        assert!(chat(temp).unwrap().is_none());
+        assert!(chat(keep).unwrap().is_some());
+    }
+
+    #[test]
+    fn branches_a_chat() {
+        scratch();
+        let c = create_chat("m", None, "").unwrap();
+        let q1 = msg(c, None, "user", "one");
+        let a1 = msg(c, Some(q1), "assistant", "two");
+        let q2 = msg(c, Some(a1), "user", "three");
+        msg(c, Some(q2), "assistant", "four");
+        let b = branch_chat(c, a1).unwrap();
+        let copied = messages(b).unwrap();
+        assert_eq!(copied.iter().map(|m| m.content.as_str()).collect::<Vec<_>>(), ["one", "two"]);
+        assert_eq!(copied[1].parent, Some(copied[0].id));
+        let bc = chat(b).unwrap().unwrap();
+        assert_eq!(bc.leaf, copied[1].id);
+        assert!(bc.title.ends_with("(branch)"));
     }
 
     #[test]

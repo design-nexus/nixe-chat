@@ -9,6 +9,10 @@ use crate::prefs::{self, Host, McpServer};
 use crate::widgets::{self, Group, Page};
 use crate::{hub, models, paths, store, theme, tools, transfer, util, voice, window};
 
+/// The choices for a chat that outgrows its context.
+pub const OVERFLOW: &[(&str, &str)] =
+    &[("rolling", "Leave out the oldest messages"), ("keep_first", "Keep the first exchange"), ("stop", "Stop and say so")];
+
 /// Fill `page` with every settings group; the settings card shows one at a time.
 pub fn build(page: &Page) {
     this_window(page);
@@ -422,6 +426,21 @@ fn chat_defaults(page: &Page) {
         ]),
         &p.num_ctx.to_string(),
         |v| prefs::update(|p| p.num_ctx = v.parse().unwrap_or(8192)),
+    );
+    g.add(&r);
+    let (r, _) = widgets::choice_row(
+        "When a chat outgrows its context",
+        "Long chats can hold more than the model takes in. Each chat can change this in its own settings.",
+        widgets::opts(OVERFLOW),
+        &p.overflow,
+        |v| prefs::update(|p| p.overflow = v),
+    );
+    g.add(&r);
+    let (r, _) = widgets::switch_row(
+        "Suggest follow-up questions",
+        "After a reply, the model offers three questions you might ask next. It takes a moment of the model's time.",
+        p.followups,
+        |on| prefs::update(|p| p.followups = on),
     );
     g.add(&r);
     let (r, _) = widgets::choice_row(

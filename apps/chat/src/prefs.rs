@@ -71,6 +71,10 @@ pub struct Prefs {
     pub top_p: f64,
     pub top_k: i64,
     pub num_ctx: i64,
+    /// What to do when a chat outgrows its context: "rolling", "keep_first" or "stop".
+    pub overflow: String,
+    /// Suggest follow-up questions after a reply.
+    pub followups: bool,
     pub keep_alive: String,
     pub think: bool,
     pub auto_title: bool,
@@ -143,6 +147,8 @@ impl Default for Prefs {
             top_p: 0.9,
             top_k: 40,
             num_ctx: 8192,
+            overflow: "rolling".into(),
+            followups: false,
             keep_alive: "5m".into(),
             think: true,
             auto_title: true,
