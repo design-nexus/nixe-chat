@@ -6,11 +6,7 @@ use crate::store::{self, Prompt};
 use crate::{hub, util, widgets, window};
 
 pub fn build() -> gtk::Widget {
-    let page = widgets::page(
-        "Prompts",
-        "Text you use often. Type / and the command in any chat to insert it; variables such as {{CLIPBOARD}} are filled in.",
-        &[],
-    );
+    let page = widgets::page("prompts");
     let g = page.group("");
     let (row, _) = widgets::button_row("New prompt", "Give it a short command, like <tt>summarize</tt>.", "Add…", |_| {
         edit(Prompt::default())

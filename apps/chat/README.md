@@ -2,7 +2,7 @@
 
 A desktop chat client for [Ollama](https://ollama.com), built with GTK 4. It chats with
 local models, lets them use tools such as web search, and has a marketplace for finding
-and downloading models from Hugging Face and the Ollama library. It takes its colours
+and downloading models from Hugging Face and the Ollama library. It takes its colors
 from your [Omarchy](https://omarchy.org) theme and fits a half-screen tile.
 
 Chat talks to an Ollama server (on this computer by default). It doesn't run models itself.
@@ -75,7 +75,7 @@ Chat talks to an Ollama server (on this computer by default). It doesn't run mod
 - **Quick ask:** `chat --quick` opens a small window for one-off questions, optionally
   about the text you've highlighted or copied. **Open in chat** keeps the exchange.
 - **Several servers:** add other computers running Ollama and switch between them from
-  the sidebar.
+  the status bar.
 - **Import and export:** all chats as one JSON file, and imports from Open WebUI exports.
 
 ### Easy on the battery
@@ -126,10 +126,14 @@ chat [--section ID] [--new] [--quick [--selection | --clipboard]] [--screenshot]
 | <kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd> | Send / new line (swappable in Settings) |
 | <kbd>Esc</kbd> | Stop the reply |
 | <kbd>Ctrl</kbd>+<kbd>N</kbd> | New chat |
-| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Search chats (or settings, on the Settings page) |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Search chats (or settings, while Settings is open) |
 | <kbd>Ctrl</kbd>+<kbd>Space</kbd> | Dictate |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Screenshot into the chat |
+| <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>7</kbd> | Go to a page in the sidebar |
+| <kbd>Alt</kbd>+<kbd>←</kbd> | Back to the previous page |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> | Collapse or expand the sidebar |
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | Settings |
+| <kbd>F1</kbd> | Show the keyboard shortcuts |
 | <kbd>Ctrl</kbd>+<kbd>Q</kbd> | Quit |
 
 ## Files

@@ -63,11 +63,7 @@ struct Round {
 }
 
 pub fn build() -> gtk::Widget {
-    let page = widgets::page(
-        "Arena",
-        "Two anonymous models answer the same prompt. Vote for the better answer; the leaderboard keeps score.",
-        &[],
-    );
+    let page = widgets::page("arena");
 
     let g = page.group("New round");
     let pickers = widgets::hbox(10);

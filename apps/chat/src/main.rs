@@ -18,6 +18,7 @@ mod quick;
 mod rag;
 mod rt;
 mod sections;
+mod settings_dialog;
 mod store;
 mod theme;
 mod tools;

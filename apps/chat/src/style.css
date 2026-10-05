@@ -1,9 +1,20 @@
-/* Chat — Nexus app style (see ~/Projects/STYLE.md). Every colour comes from the
- * @theme_* tokens defined by the active palette (see theme.rs). */
+/* Chat — Nexus app style (see ~/Projects/STYLE.md). One flat surface split by
+ * hairlines, monospace throughout. Every color comes from the @theme_* tokens
+ * defined by the active palette (see theme.rs), or from the mixes of them below. */
+
+@define-color hairline mix(@theme_bg, @theme_border, 0.82);
+@define-color divider alpha(@theme_text, 0.08);
+@define-color nav_active mix(@theme_bg, @theme_accent, 0.18);
+@define-color row_hover mix(@theme_bg, @theme_accent, 0.07);
+@define-color lift mix(@theme_bg, @theme_muted, 0.09);
+@define-color lift_active mix(@lift, @theme_accent, 0.1);
+@define-color veil alpha(mix(@theme_bg, @theme_shadow, 0.45), 0.82);
 
 window.chat-window {
   background: @theme_bg;
   color: @theme_text;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-weight: 500;
 }
 
 window.chat-window,
@@ -18,18 +29,104 @@ window.chat-window dialog {
   font-feature-settings: "tnum";
 }
 
+/* ---------- Top bar and status bar ---------- */
+
+.window-frame {
+  background: @theme_bg;
+}
+
+.top-bar {
+  min-height: 46px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid @hairline;
+}
+
+.crumbs {
+  margin-left: 8px;
+}
+
+.crumb-root,
+.crumb-sep {
+  color: @theme_dim_text;
+}
+
+.crumb {
+  color: @theme_accent;
+}
+
+window.chat-window button.bar-button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.bar-button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+/* A config-file menu in the top bar looks like the other bar buttons. */
+window.chat-window menubutton.bar-button > button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window menubutton.bar-button > button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window entry.bar-search {
+  min-height: 30px;
+  margin-right: 4px;
+}
+
+.status-bar {
+  min-height: 34px;
+  padding: 0 16px 0 10px;
+  border-top: 1px solid @hairline;
+  font-size: 0.86em;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.status-help {
+  min-height: 24px;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: @theme_dim_text;
+  font-weight: 500;
+}
+
+window.chat-window button.status-help:hover {
+  color: @theme_text;
+}
+
+.status-key {
+  color: @theme_text;
+}
+
 /* ---------- Sidebar ---------- */
 
 .settings-navigation {
-  background: @theme_surface;
-  min-width: 240px;
-  padding: 20px 15px 14px;
-  border-right: 1px solid alpha(@theme_border, 0.55);
+  background: @theme_bg;
+  min-width: 250px;
+  padding: 10px 6px;
+  border-right: 1px solid @hairline;
 }
 
 .settings-navigation.compact {
   min-width: 0;
-  padding: 16px 6px;
+  padding: 10px 6px;
 }
 
 .settings-navigation.compact button.nav-item {
@@ -37,62 +134,47 @@ window.chat-window dialog {
   padding: 0;
 }
 
-.settings-navigation .nav-head {
-  margin-bottom: 14px;
-}
-
-.settings-navigation.compact .nav-head {
-  margin-bottom: 10px;
-}
-
-window.chat-window .settings-navigation button.nav-collapse {
-  min-width: 30px;
-  min-height: 30px;
-  padding: 0;
-  border-radius: 7px;
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-
-window.chat-window .settings-navigation button.nav-collapse image {
-  color: @theme_dim_text;
-}
-
-window.chat-window .settings-navigation button.nav-collapse:hover {
-  background: alpha(@theme_highlight, 0.7);
-}
-
-window.chat-window .settings-navigation button.nav-collapse:hover image {
-  color: @theme_text;
-}
-
-.settings-navigation .menu-heading {
-  margin: 0 10px;
-  font-size: 0.875em;
-  font-weight: 800;
-  letter-spacing: 2px;
-  color: @theme_dim_text;
-}
-
 .settings-navigation .nav-group {
-  margin: 16px 10px 6px;
-  font-size: 0.72em;
-  font-weight: 700;
-  letter-spacing: 1.6px;
-  color: alpha(@theme_dim_text, 0.85);
+  margin: 10px -6px 4px;
+  padding: 16px 18px 4px;
+  border-top: 1px solid @hairline;
+  font-size: 0.76em;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: @theme_dim_text;
+}
+
+.settings-navigation .nav-group.first {
+  margin-top: 0;
+  padding-top: 6px;
+  border-top: none;
+}
+
+.settings-navigation.compact .nav-group {
+  /* Just the hairline, across the column. */
+  min-width: 12px;
+  margin: 8px -6px;
+  padding: 0;
+  min-height: 0;
+  font-size: 0;
+}
+
+.settings-navigation.compact .nav-group.first {
+  border-top: none;
+  margin: 0;
 }
 
 .settings-navigation button.nav-item {
-  min-height: 38px;
+  min-height: 42px;
   padding: 0 12px;
   margin: 1px 0;
   border-radius: 6px;
   border: none;
   background: transparent;
   box-shadow: none;
-  color: alpha(@theme_text, 0.78);
-  transition: background 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out;
+  color: @theme_text;
+  font-weight: 500;
+  transition: background 150ms ease-out, color 150ms ease-out;
 }
 
 .settings-navigation button.nav-item image {
@@ -100,28 +182,16 @@ window.chat-window .settings-navigation button.nav-collapse:hover image {
 }
 
 .settings-navigation button.nav-item:hover {
-  background: alpha(@theme_highlight, 0.55);
-  color: @theme_text;
+  background: @row_hover;
 }
 
 .settings-navigation button.nav-item.active {
-  background: alpha(@theme_accent, 0.16);
-  color: @theme_text;
-  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.42);
-}
-
-.settings-navigation button.nav-item.active image {
-  color: @theme_accent;
+  background: @nav_active;
+  box-shadow: none;
 }
 
 .settings-navigation button.nav-item .nav-label {
-  font-weight: 600;
-}
-
-.settings-navigation .nav-footer {
-  margin-top: 8px;
-  padding-top: 10px;
-  border-top: 1px solid alpha(@theme_border, 0.45);
+  font-weight: 500;
 }
 
 /* ---------- Search ---------- */
@@ -129,23 +199,23 @@ window.chat-window .settings-navigation button.nav-collapse:hover image {
 entry.settings-search,
 searchbar entry,
 entry.settings-search > text {
-  min-height: 34px;
+  min-height: 36px;
 }
 
 entry.settings-search {
-  margin: 0 0 6px;
-  padding: 0 10px;
-  border-radius: 7px;
-  background: alpha(@theme_bg, 0.7);
-  border: 1px solid alpha(@theme_border, 0.7);
+  margin: 0 0 14px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
   box-shadow: none;
   color: @theme_text;
   outline: none;
 }
 
 entry.settings-search:focus-within {
-  border-color: alpha(@theme_accent, 0.8);
-  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38);
+  border-color: @theme_accent;
+  box-shadow: none;
 }
 
 entry.settings-search image {
@@ -159,38 +229,47 @@ entry.settings-search image {
 }
 
 .settings-page {
-  padding: 30px 36px 48px;
+  padding: 12px 24px 36px;
+}
+
+/* A page's first heading sits right under the top padding, so the space
+ * above it matches the space below it. */
+.settings-page > .settings-group:first-child > .group-title,
+.settings-page > .settings-group:first-child > .group-head,
+.settings-page > .settings-group:first-child > box:first-child > .group-title,
+.group-title.page-first,
+.group-head.page-first {
+  margin-top: 0;
 }
 
 .settings-page.narrow {
-  padding: 22px 18px 40px;
+  padding: 12px 16px 32px;
 }
 
-.section-header {
-  margin-bottom: 8px;
+/* Pages that fill the window (tables, grids) run edge to edge under their
+ * toolbar; their parts bring their own padding. */
+.settings-page.fill,
+.settings-page.fill.narrow {
+  padding: 0;
 }
 
-.section-title {
-  font-size: 1.62em;
-  font-weight: 800;
+/* A dialog's bold title. */
+.dialog-card .dialog-title {
+  font-size: 1.2em;
+  font-weight: 700;
   color: @theme_text;
 }
 
-.section-description {
-  margin-top: 2px;
-  color: @theme_dim_text;
-}
-
 .group-title {
-  margin: 24px 2px 8px;
-  font-size: 0.76em;
-  font-weight: 800;
-  letter-spacing: 1.6px;
+  margin: 26px 2px 12px;
+  font-size: 0.9em;
+  font-weight: 600;
+  letter-spacing: 2px;
   color: @theme_dim_text;
 }
 
 .group-note {
-  margin: -2px 2px 10px;
+  margin: -6px 2px 12px;
   font-size: 0.88em;
   color: @theme_dim_text;
 }
@@ -199,26 +278,32 @@ entry.settings-search image {
   /* the rows provide the chrome */
 }
 
+/* A row on its own draws its own card; rows in a group share the group's. */
 .settings-option {
-  background: mix(@theme_bg, @theme_muted, 0.25);
-  border: 1px solid alpha(@theme_border, 0.55);
-  border-radius: 6px;
-  min-height: 60px;
-  padding: 10px 14px;
-  transition: border-color 150ms ease-out, box-shadow 150ms ease-out, background 150ms ease-out;
+  border: 1px solid @hairline;
+  border-radius: 10px;
+  min-height: 52px;
+  padding: 10px 20px;
 }
 
-.settings-option:hover {
-  border-color: alpha(@theme_border, 0.95);
+.group-list {
+  border: 1px solid @hairline;
+  border-radius: 10px;
 }
 
-.settings-option.search-hit {
-  border-color: alpha(@theme_accent, 0.72);
-  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38), 0 0 14px alpha(@theme_glow, 0.24);
+.group-list .settings-option {
+  border: none;
+  border-top: 1px solid @divider;
+  border-radius: 0;
+}
+
+.group-list > .settings-option:first-child,
+.group-list > box:first-child > .settings-option:first-child {
+  border-top: none;
 }
 
 .settings-option.tall {
-  padding: 14px 16px;
+  padding: 14px 20px;
 }
 
 .settings-option-title {
@@ -266,16 +351,15 @@ window.chat-window button {
   min-height: 32px;
   padding: 0 12px;
   border-radius: 6px;
-  background: alpha(@theme_muted, 0.32);
-  border: 1px solid alpha(@theme_border, 0.8);
+  background: transparent;
+  border: 1px solid @hairline;
   box-shadow: none;
   color: @theme_text;
   transition: background 150ms ease-out, border-color 150ms ease-out;
 }
 
 window.chat-window button:hover {
-  background: alpha(@theme_muted, 0.55);
-  border-color: alpha(@theme_accent, 0.55);
+  background: @row_hover;
 }
 
 window.chat-window button:active {
@@ -287,14 +371,18 @@ window.chat-window button:disabled {
 }
 
 window.chat-window button.suggested-action {
-  background: @theme_accent;
-  border-color: @theme_accent;
-  color: @theme_on_accent;
-  font-weight: 700;
+  background: @nav_active;
+  border-color: transparent;
+  color: @theme_text;
+  font-weight: 600;
+}
+
+window.chat-window button.suggested-action image {
+  color: @theme_accent;
 }
 
 window.chat-window button.suggested-action:hover {
-  background: mix(@theme_accent, @theme_text, 0.12);
+  background: mix(@theme_bg, @theme_accent, 0.26);
 }
 
 window.chat-window button.destructive-action {
@@ -309,17 +397,27 @@ window.chat-window button.flat {
 }
 
 window.chat-window button.flat:hover {
-  background: alpha(@theme_highlight, 0.55);
+  background: @row_hover;
 }
 
-window.chat-window menubutton.flat > button {
+window.chat-window menubutton.flat > button,
+window.chat-window togglebutton.flat,
+window.chat-window button.toggle.flat {
   background: transparent;
   border-color: transparent;
 }
 
 window.chat-window menubutton.flat > button:hover,
 window.chat-window menubutton.flat > button:checked {
-  background: alpha(@theme_highlight, 0.55);
+  background: @row_hover;
+}
+
+window.chat-window button.toggle.flat:checked {
+  background: @nav_active;
+}
+
+window.chat-window button.toggle.flat:checked image {
+  color: @theme_accent;
 }
 
 window.chat-window button.reset-button {
@@ -330,26 +428,16 @@ window.chat-window button.reset-button {
   color: @theme_dim_text;
 }
 
-window.chat-window button.open-config {
-  min-height: 34px;
-  padding: 0 14px;
-  font-weight: 600;
-}
-
-window.chat-window button.open-config image {
-  color: @theme_accent;
-}
-
 window.chat-window button.chip {
   min-height: 28px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 0.9em;
 }
 
 window.chat-window button.chip.selected {
-  background: alpha(@theme_accent, 0.2);
-  border-color: alpha(@theme_accent, 0.8);
+  background: @nav_active;
+  border-color: transparent;
   color: @theme_text;
 }
 
@@ -358,9 +446,9 @@ window.chat-window button.chip.selected {
 window.chat-window entry,
 window.chat-window spinbutton {
   min-height: 32px;
-  border-radius: 5px;
-  background: alpha(@theme_bg, 0.65);
-  border: 1px solid alpha(@theme_border, 0.8);
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
   box-shadow: none;
   color: @theme_text;
 }
@@ -368,7 +456,7 @@ window.chat-window spinbutton {
 window.chat-window entry:focus-within,
 window.chat-window spinbutton:focus-within {
   border-color: @theme_accent;
-  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38);
+  box-shadow: none;
 }
 
 window.chat-window dropdown > button {
@@ -377,16 +465,15 @@ window.chat-window dropdown > button {
 
 window.chat-window popover > contents {
   background: @theme_surface;
-  border: 1px solid alpha(@theme_border, 0.7);
-  border-radius: 9px;
-  box-shadow: 0 4px 16px alpha(@theme_shadow, 0.5);
+  border: 1px solid @hairline;
+  border-radius: 10px;
   color: @theme_text;
   padding: 4px;
 }
 
 window.chat-window popover listview > row,
 window.chat-window popover list > row {
-  border-radius: 5px;
+  border-radius: 6px;
   padding: 6px 10px;
   color: @theme_text;
 }
@@ -398,31 +485,30 @@ window.chat-window popover listview > row:selected {
 }
 
 window.chat-window switch {
-  min-width: 40px;
-  min-height: 22px;
+  min-width: 44px;
+  min-height: 26px;
   border-radius: 999px;
-  background: alpha(@theme_muted, 0.85);
-  border: 1px solid alpha(@theme_border, 0.9);
+  background: alpha(@theme_muted, 0.3);
+  border: 1px solid @hairline;
   box-shadow: none;
 }
 
 window.chat-window switch:checked {
-  background: @theme_accent;
-  border-color: @theme_accent;
+  background: mix(@theme_bg, @theme_accent, 0.25);
 }
 
 window.chat-window switch > slider {
   min-width: 18px;
   min-height: 18px;
-  margin: 1px;
+  margin: 3px;
   border-radius: 999px;
-  background: @theme_text;
+  background: @theme_dim_text;
   border: none;
-  box-shadow: 0 1px 3px alpha(@theme_shadow, 0.5);
+  box-shadow: none;
 }
 
 window.chat-window switch:checked > slider {
-  background: @theme_on_accent;
+  background: @theme_accent;
 }
 
 window.chat-window scale {
@@ -453,7 +539,6 @@ window.chat-window scale.marks-after > trough > slider {
   border-radius: 999px;
   background: @theme_text;
   border: 2px solid @theme_accent;
-  box-shadow: 0 0 10px alpha(@theme_glow, 0.35);
 }
 
 window.chat-window scale:disabled {
@@ -474,15 +559,13 @@ window.chat-window scrollbar slider {
   background: alpha(@theme_muted, 0.9);
 }
 
-/* ---------- Cards (themes, gestures) ---------- */
-
 /* ---------- Theme swatches ---------- */
 
 .theme-card {
   padding: 0;
-  border-radius: 8px;
-  border: 1px solid alpha(@theme_border, 0.6);
-  background: mix(@theme_bg, @theme_muted, 0.2);
+  border-radius: 10px;
+  border: 1px solid @hairline;
+  background: transparent;
 }
 
 .theme-card:hover {
@@ -491,11 +574,10 @@ window.chat-window scrollbar slider {
 
 .theme-card.selected {
   border-color: @theme_accent;
-  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.72), 0 0 14px alpha(@theme_glow, 0.24);
 }
 
 .theme-card picture {
-  border-radius: 7px 7px 0 0;
+  border-radius: 9px 9px 0 0;
 }
 
 .theme-card .theme-card-name {
@@ -514,7 +596,7 @@ window.chat-window scrollbar slider {
 
 .banner {
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: alpha(@theme_accent, 0.12);
   border: 1px solid alpha(@theme_accent, 0.45);
   margin-bottom: 14px;
@@ -525,20 +607,52 @@ window.chat-window scrollbar slider {
   border-color: alpha(@theme_danger, 0.45);
 }
 
+/* Buttons on a banner are its action: a solid accent, so they stand out on the tint. */
+window.chat-window .banner button {
+  background: @theme_accent;
+  border-color: @theme_accent;
+  color: @theme_on_accent;
+  font-weight: 600;
+}
+
+window.chat-window .banner button:hover {
+  background: mix(@theme_accent, @theme_text, 0.12);
+}
+
+window.chat-window .banner.warning button {
+  background: @theme_danger;
+  border-color: @theme_danger;
+}
+
+window.chat-window .banner.warning button:hover {
+  background: mix(@theme_danger, @theme_text, 0.12);
+}
+
 .toast {
-  margin: 18px;
+  /* Above the status bar (and the message bar on the chat page). */
+  margin: 18px 18px 56px;
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: @theme_surface;
-  border: 1px solid alpha(@theme_border, 0.8);
-  box-shadow: 0 4px 16px alpha(@theme_shadow, 0.5), 0 0 14px alpha(@theme_glow, 0.14);
+  border: 1px solid @hairline;
+}
+
+window.chat-window button.toast-action {
+  min-height: 28px;
+  margin: -4px -8px -4px 0;
+  padding: 0 12px;
+  font-weight: 700;
+  color: @theme_accent;
+}
+
+window.chat-window button.toast-action:hover {
+  background: alpha(@theme_accent, 0.14);
 }
 
 .dialog-card {
   background: @theme_bg;
-  border: 1px solid alpha(@theme_border, 0.65);
+  border: 1px solid @hairline;
   border-radius: 14px;
-  box-shadow: 0 0 28px alpha(@theme_glow, 0.08);
   padding: 24px;
 }
 
@@ -562,7 +676,312 @@ textview.code-block > text {
   padding: 2px 7px;
   border-radius: 4px;
   background: alpha(@theme_muted, 0.55);
-  border: 1px solid alpha(@theme_border, 0.9);
+  border: 1px solid @hairline;
+}
+
+/* ---------- Tags ---------- */
+
+.tag {
+  font-size: 0.72em;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.55);
+  color: @theme_dim_text;
+}
+
+.tag.accent {
+  background: alpha(@theme_accent, 0.18);
+  color: @theme_text;
+}
+
+.tag.danger {
+  background: alpha(@theme_danger, 0.14);
+  color: @theme_danger;
+}
+
+/* ---------- Tables ---------- */
+
+/* A page's toolbar sits on a hairline above its table. */
+.toolbar,
+.list-toolbar {
+  min-height: 46px;
+  margin: 0;
+  padding: 0 12px 0 14px;
+  background: transparent;
+  border-bottom: 1px solid @hairline;
+}
+
+/* A line of help above a list, on the same hairline as a toolbar. */
+.page-hint {
+  padding: 12px 14px;
+  border-bottom: 1px solid @hairline;
+  color: @theme_dim_text;
+}
+
+/* Toolbar controls sit centred in the row instead of stretching to it. */
+.toolbar > *,
+.list-toolbar > * {
+  margin-top: 7px;
+  margin-bottom: 7px;
+}
+
+.table-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+window.chat-window columnview {
+  background: transparent;
+  color: @theme_text;
+}
+
+window.chat-window columnview > header {
+  background: transparent;
+  border-bottom: 1px solid @hairline;
+}
+
+window.chat-window columnview > header > button {
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid @hairline;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window columnview > header > button:first-child {
+  border-left: none;
+}
+
+window.chat-window columnview > header,
+window.chat-window columnview > header > button,
+window.chat-window columnview > header > button > box {
+  font-size: 1em;
+}
+
+window.chat-window columnview > header > button > box > label {
+  font-size: 0.86em;
+  font-weight: 500;
+  color: @theme_dim_text;
+}
+
+window.chat-window columnview > header > button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window columnview > header > button sort-indicator {
+  color: @theme_accent;
+}
+
+window.chat-window columnview > listview {
+  background: transparent;
+}
+
+window.chat-window columnview > listview > row {
+  border-radius: 0;
+  margin: 0;
+  min-height: 35px;
+}
+
+window.chat-window columnview > listview > row:hover {
+  background: @row_hover;
+}
+
+window.chat-window columnview > listview > row:selected {
+  background: @nav_active;
+  box-shadow: none;
+  color: @theme_text;
+}
+
+window.chat-window columnview > listview > row > cell {
+  padding: 6px 16px;
+}
+
+.cell-dim {
+  color: @theme_dim_text;
+}
+
+.tree-expander {
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin: 0;
+}
+
+window.chat-window button.tree-expander {
+  min-height: 18px;
+  min-width: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.tree-expander:hover {
+  background: @row_hover;
+}
+
+.empty-state {
+  padding: 40px;
+  color: @theme_dim_text;
+}
+
+window.chat-window list.table-card {
+  background: transparent;
+  color: @theme_text;
+}
+
+window.chat-window list.table-card > row {
+  border-radius: 0;
+  margin: 0;
+}
+
+window.chat-window list.table-card > row:hover {
+  background: @row_hover;
+}
+
+window.chat-window list.table-card > row:selected {
+  background: @nav_active;
+  box-shadow: none;
+}
+
+/* ---------- Segmented control ---------- */
+
+.segmented {
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
+  padding: 2px;
+}
+
+window.chat-window .segmented button.segment {
+  min-height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: alpha(@theme_text, 0.78);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+window.chat-window .segmented button.segment:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window .segmented button.segment:checked {
+  background: @nav_active;
+  color: @theme_text;
+}
+
+/* ---------- Settings card ---------- */
+
+.settings-veil {
+  background: @veil;
+}
+
+.settings-dialog {
+  background: @theme_bg;
+  border: 1px solid @hairline;
+  border-radius: 14px;
+}
+
+.settings-dialog-side {
+  min-width: 280px;
+  padding: 22px 14px;
+  border-right: 1px solid @hairline;
+}
+
+.settings-dialog.narrow .settings-dialog-side {
+  min-width: 200px;
+  padding: 18px 8px;
+}
+
+.settings-dialog.narrow .dialog-head {
+  padding: 0 12px 0 20px;
+}
+
+.settings-dialog.narrow .settings-dialog-main .settings-page {
+  padding: 16px 16px 24px;
+}
+
+.dialog-heading {
+  margin: 0 4px 16px;
+  font-size: 0.92em;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.dialog-nav {
+  min-height: 0;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+}
+
+window.chat-window button.dialog-nav image {
+  margin-top: 2px;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.dialog-nav:hover {
+  background: @row_hover;
+}
+
+window.chat-window button.dialog-nav.active {
+  background: @lift_active;
+}
+
+window.chat-window button.dialog-nav.active image {
+  color: @theme_accent;
+}
+
+.dialog-nav-title {
+  font-weight: 600;
+  color: alpha(@theme_text, 0.82);
+}
+
+window.chat-window button.dialog-nav.active .dialog-nav-title {
+  color: @theme_text;
+}
+
+.dialog-nav-summary {
+  font-size: 0.86em;
+  color: @theme_dim_text;
+}
+
+.settings-dialog-main {
+  background: @lift;
+}
+
+.dialog-head {
+  min-height: 64px;
+  padding: 0 18px 0 32px;
+  border-bottom: 1px solid @hairline;
+}
+
+.dialog-title {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.dialog-empty {
+  color: @theme_dim_text;
+}
+
+.settings-dialog-main .settings-page {
+  padding: 28px 40px 40px;
+}
+
+.settings-dialog-main .settings-page.narrow {
+  padding: 20px 20px 28px;
 }
 
 /* ---------- Sidebar readouts and footer ---------- */
@@ -594,14 +1013,14 @@ window.chat-window button.live-pill.paused {
 
 window.chat-window button.stat-tile {
   padding: 12px 14px 10px;
-  border-radius: 8px;
-  background: mix(@theme_bg, @theme_muted, 0.25);
-  border: 1px solid alpha(@theme_border, 0.55);
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid @hairline;
   min-width: 150px;
 }
 
 window.chat-window button.stat-tile:hover {
-  background: mix(@theme_bg, @theme_muted, 0.32);
+  background: @row_hover;
   border-color: alpha(@theme_accent, 0.55);
 }
 
@@ -626,8 +1045,8 @@ window.chat-window button.stat-tile:hover {
 /* ---------- Graphs ---------- */
 
 .graph-card {
-  background: mix(@theme_bg, @theme_muted, 0.25);
-  border: 1px solid alpha(@theme_border, 0.55);
+  background: mix(@theme_bg, @theme_surface, 0.5);
+  border: 1px solid @hairline;
   border-radius: 6px;
   padding: 14px 16px;
 }
@@ -685,14 +1104,13 @@ window.chat-window button.stat-tile:hover {
   padding: 5px 9px;
   border-radius: 6px;
   background: @theme_surface;
-  border: 1px solid alpha(@theme_border, 0.8);
-  box-shadow: 0 4px 16px alpha(@theme_shadow, 0.5);
+  border: 1px solid @hairline;
   color: @theme_text;
 }
 
 .core-cell {
   background: mix(@theme_bg, @theme_surface, 0.5);
-  border: 1px solid alpha(@theme_border, 0.45);
+  border: 1px solid @hairline;
   border-radius: 6px;
   padding: 6px 8px 4px;
   min-width: 96px;
@@ -771,104 +1189,8 @@ window.chat-window levelbar > trough > block.empty {
 .composition .part-used { background: @theme_accent; border-radius: 999px 0 0 999px; }
 .composition .part-cached { background: alpha(@theme_accent, 0.4); }
 
-/* ---------- Tags ---------- */
-
-.tag {
-  font-size: 0.72em;
-  font-weight: 700;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: alpha(@theme_muted, 0.55);
-  color: @theme_dim_text;
-}
-
-.tag.accent {
-  background: alpha(@theme_accent, 0.18);
-  color: @theme_text;
-}
-
-.tag.danger {
-  background: alpha(@theme_danger, 0.14);
-  color: @theme_danger;
-}
-
-/* ---------- Tables (processes, services) ---------- */
-
-.settings-page.fill {
-  padding-bottom: 22px;
-}
-
-.toolbar {
-  margin: 14px 0 10px;
-}
-
-.table-card {
-  background: mix(@theme_bg, @theme_muted, 0.18);
-  border: 1px solid alpha(@theme_border, 0.55);
-  border-radius: 6px;
-}
-
-window.chat-window columnview {
-  background: transparent;
-  color: @theme_text;
-}
-
-window.chat-window columnview > header {
-  background: transparent;
-  border-bottom: 1px solid alpha(@theme_border, 0.55);
-}
-
-window.chat-window columnview > header > button {
-  min-height: 30px;
-  padding: 0 10px;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  font-weight: 700;
-  color: @theme_dim_text;
-}
-
-window.chat-window columnview > header > button,
-window.chat-window columnview > header > button > box > label {
-  font-size: 1em;
-  font-weight: 700;
-}
-
-window.chat-window columnview > header > button:hover {
-  background: alpha(@theme_highlight, 0.4);
-  color: @theme_text;
-}
-
-window.chat-window columnview > header > button sort-indicator {
-  color: @theme_accent;
-}
-
-window.chat-window columnview > listview {
-  background: transparent;
-}
-
-window.chat-window columnview > listview > row {
-  border-radius: 5px;
-  margin: 0 4px;
-  transition: background 150ms ease-out;
-}
-
-window.chat-window columnview > listview > row:hover {
-  background: alpha(@theme_highlight, 0.55);
-}
-
-window.chat-window columnview > listview > row:selected {
-  background: alpha(@theme_accent, 0.16);
-  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.42);
-  color: @theme_text;
-}
-
-window.chat-window columnview > listview > row > cell {
-  padding: 5px 10px;
-}
 
 .cell-num {
-  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
   font-feature-settings: "tnum";
   font-size: 0.92em;
 }
@@ -878,50 +1200,19 @@ window.chat-window columnview > listview > row > cell {
   font-weight: 700;
 }
 
-.cell-dim {
-  color: @theme_dim_text;
-}
-
-.tree-expander {
-  min-width: 18px;
-  min-height: 18px;
-  padding: 0;
-  margin: 0;
-}
-
-window.chat-window button.tree-expander {
-  min-height: 18px;
-  min-width: 18px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: @theme_dim_text;
-}
-
-window.chat-window button.tree-expander:hover {
-  background: alpha(@theme_highlight, 0.55);
-}
-
 .details-panel {
   margin-top: 10px;
-  background: mix(@theme_bg, @theme_muted, 0.25);
-  border: 1px solid alpha(@theme_border, 0.55);
-  border-radius: 6px;
+  border: 1px solid @hairline;
+  border-radius: 10px;
   padding: 12px 16px;
 }
 
 .details-title {
   font-size: 1.1em;
-  font-weight: 800;
+  font-weight: 700;
 }
 
-.empty-state {
-  padding: 40px;
-  color: @theme_dim_text;
-}
-
-window.chat-window list.service-list,
-window.chat-window list.table-card {
+window.chat-window list.service-list {
   background: transparent;
   color: @theme_text;
 }
@@ -929,20 +1220,6 @@ window.chat-window list.table-card {
 window.chat-window list.service-list > row {
   padding: 0 0 6px;
   background: transparent;
-}
-
-window.chat-window list.table-card > row {
-  border-radius: 5px;
-  margin: 2px 4px;
-}
-
-window.chat-window list.table-card > row:hover {
-  background: alpha(@theme_highlight, 0.55);
-}
-
-window.chat-window list.table-card > row:selected {
-  background: alpha(@theme_accent, 0.16);
-  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.42);
 }
 
 /* =====================================================================
@@ -976,8 +1253,8 @@ window.chat-window button.small {
 window.chat-window button.chip:checked,
 window.chat-window togglebutton.chip:checked,
 window.chat-window button.chip.selected {
-  background: alpha(@theme_accent, 0.2);
-  border-color: alpha(@theme_accent, 0.8);
+  background: @nav_active;
+  border-color: transparent;
   color: @theme_text;
 }
 
@@ -988,16 +1265,16 @@ window.chat-window button.chip.selected image {
 
 /* Segmented control */
 .segmented {
-  background: alpha(@theme_muted, 0.32);
-  border: 1px solid alpha(@theme_border, 0.8);
-  border-radius: 7px;
+  background: transparent;
+  border: 1px solid @hairline;
+  border-radius: 6px;
   padding: 2px;
 }
 
 window.chat-window .segmented > button {
   min-height: 28px;
   padding: 0 12px;
-  border-radius: 5px;
+  border-radius: 6px;
   border: none;
   background: transparent;
   font-weight: 600;
@@ -1005,24 +1282,23 @@ window.chat-window .segmented > button {
 }
 
 window.chat-window .segmented > button:hover {
-  background: alpha(@theme_highlight, 0.55);
+  background: @row_hover;
 }
 
 window.chat-window .segmented > button.selected {
-  background: @theme_accent;
-  color: @theme_on_accent;
+  background: @nav_active;
+  color: @theme_text;
 }
 
 /* Text areas */
 .text-area-frame {
-  border-radius: 5px;
-  background: alpha(@theme_bg, 0.65);
-  border: 1px solid alpha(@theme_border, 0.8);
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
 }
 
 .text-area-frame:focus-within {
   border-color: @theme_accent;
-  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38);
 }
 
 textview.text-area,
@@ -1038,7 +1314,7 @@ window.chat-window popover.menu > contents {
 
 window.chat-window button.menu-row {
   min-height: 32px;
-  border-radius: 5px;
+  border-radius: 6px;
   font-weight: 500;
 }
 
@@ -1058,39 +1334,34 @@ window.chat-window button.menu-row:hover {
   padding: 8px;
 }
 
-/* ---------- Sidebar: chat list and footer ---------- */
+/* ---------- Sidebar: group labels and the chat list ---------- */
 
-window.chat-window button.new-chat {
-  min-height: 30px;
-  min-width: 30px;
+/* A group label's flat + sits at its right end, on the label's line. */
+window.chat-window .nav-group button.nav-add {
+  min-width: 22px;
+  min-height: 22px;
+  margin: -6px -8px -6px 0;
   padding: 0;
-  margin: 0;
-  border-radius: 7px;
+  border: none;
+  font-size: 1rem;
+  color: @theme_dim_text;
 }
 
-window.chat-window button.new-chat image {
-  color: @theme_accent;
-}
-
-.chat-list-head {
-  margin: 14px 0 2px;
-}
-
-.chat-list-head .nav-group {
-  margin: 0 10px;
+window.chat-window .nav-group button.nav-add:hover {
+  background: @row_hover;
+  color: @theme_text;
 }
 
 .chat-date-group {
-  margin: 12px 10px 4px;
-  font-size: 0.72em;
-  font-weight: 700;
-  letter-spacing: 1.6px;
-  color: alpha(@theme_dim_text, 0.85);
+  margin: 10px 12px 2px;
+  font-size: 0.76em;
+  color: @theme_dim_text;
 }
 
 .chat-list-empty {
-  margin: 8px 10px;
-  font-size: 0.9em;
+  margin: 4px 12px 6px;
+  font-size: 0.86em;
+  color: @theme_dim_text;
 }
 
 window.chat-window button.chat-item {
@@ -1104,13 +1375,12 @@ window.chat-window button.chat-item {
 }
 
 window.chat-window button.chat-item:hover {
-  background: alpha(@theme_highlight, 0.55);
+  background: @row_hover;
   color: @theme_text;
 }
 
 window.chat-window button.chat-item.active {
-  background: alpha(@theme_accent, 0.16);
-  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.42);
+  background: @nav_active;
   color: @theme_text;
 }
 
@@ -1174,42 +1444,43 @@ window.chat-window button.archive-toggle {
 
 .status-dot.on {
   background: @theme_accent;
-  box-shadow: 0 0 6px alpha(@theme_glow, 0.5);
 }
 
 .status-dot.off {
   background: @theme_danger;
 }
 
-window.chat-window dropdown.host-switcher > button {
+/* The server switcher sits in the status bar, as quiet as its text. */
+window.chat-window .status-bar dropdown.host-switcher > button {
   min-width: 0;
+  min-height: 24px;
+  padding: 0 8px;
+  border-color: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window .status-bar dropdown.host-switcher > button:hover {
+  color: @theme_text;
+}
+
+.status-note {
+  color: @theme_dim_text;
 }
 
 /* ---------- Chat page ---------- */
 
-.chat-header {
-  padding: 12px 20px 10px;
-  border-bottom: 1px solid alpha(@theme_border, 0.45);
-}
-
-window.chat-window button.chat-title-btn {
-  padding: 0 8px;
-  min-height: 34px;
-}
-
-.chat-page-title {
-  font-size: 1.15em;
-  font-weight: 800;
-}
-
 window.chat-window dropdown.model-picker > button {
-  min-width: 360px;
-  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
-  font-size: 0.9em;
+  min-width: 260px;
+  min-height: 30px;
+}
+
+.narrow window.chat-window dropdown.model-picker > button,
+.chat-page.narrow dropdown.model-picker > button {
+  min-width: 160px;
 }
 
 .chat-banners .banner {
-  margin: 10px 20px 0;
+  margin: 12px 24px 0;
 }
 
 .messages-wrap {
@@ -1222,7 +1493,7 @@ window.chat-window dropdown.model-picker > button {
 
 .chat-footer {
   background: @theme_bg;
-  border-top: 1px solid alpha(@theme_border, 0.45);
+  border-top: 1px solid @hairline;
   padding: 12px 0 0;
 }
 
@@ -1235,8 +1506,7 @@ window.chat-window dropdown.model-picker > button {
 }
 
 .chat-empty-title {
-  font-size: 1.62em;
-  font-weight: 800;
+  color: @theme_dim_text;
 }
 
 .prompt-chips {
@@ -1250,19 +1520,19 @@ window.chat-window button.jump-bottom {
   padding: 0;
   border-radius: 999px;
   background: @theme_surface;
-  box-shadow: 0 4px 16px alpha(@theme_shadow, 0.5);
+  border: 1px solid @hairline;
 }
 
 /* User messages */
 .user-msg {
   padding: 10px 14px;
-  border-radius: 14px 14px 4px 14px;
-  background: mix(@theme_bg, @theme_muted, 0.45);
-  border: 1px solid alpha(@theme_border, 0.55);
+  border-radius: 10px;
+  background: @lift;
+  border: 1px solid @hairline;
 }
 
 .user-msg.editing {
-  border-color: alpha(@theme_accent, 0.72);
+  border-color: @theme_accent;
 }
 
 .user-text {
@@ -1272,12 +1542,12 @@ window.chat-window button.jump-bottom {
 .file-chip {
   padding: 3px 8px;
   border-radius: 6px;
-  background: alpha(@theme_bg, 0.6);
+  border: 1px solid @hairline;
   font-size: 0.86em;
 }
 
 .thumb {
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 window.chat-window button.thumb-btn {
@@ -1309,9 +1579,9 @@ window.chat-window button.thumb-btn {
 .compare-row > .assistant-msg,
 .live-box > .assistant-msg {
   padding: 12px 14px;
-  border-radius: 8px;
-  border: 1px solid alpha(@theme_border, 0.55);
-  background: mix(@theme_bg, @theme_muted, 0.12);
+  border-radius: 10px;
+  border: 1px solid @hairline;
+  background: transparent;
 }
 
 .live-box > .assistant-msg:only-child {
@@ -1321,8 +1591,7 @@ window.chat-window button.thumb-btn {
 }
 
 .compare-row > .assistant-msg.selected {
-  border-color: alpha(@theme_accent, 0.72);
-  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38), 0 0 14px alpha(@theme_glow, 0.24);
+  border-color: @theme_accent;
 }
 
 .model-name {
@@ -1346,7 +1615,7 @@ window.chat-window button.source-chip {
   border-radius: 999px;
   font-size: 0.82em;
   background: alpha(@theme_muted, 0.32);
-  border: 1px solid alpha(@theme_border, 0.8);
+  border: 1px solid @hairline;
 }
 
 window.chat-window button.source-chip label {
@@ -1369,7 +1638,7 @@ window.chat-window button.disclosure {
 }
 
 window.chat-window button.disclosure:hover {
-  background: alpha(@theme_highlight, 0.55);
+  background: @row_hover;
 }
 
 .thinking-title {
@@ -1386,8 +1655,8 @@ window.chat-window button.disclosure:hover {
 /* Tool calls */
 .tool-card {
   border-radius: 6px;
-  border: 1px solid alpha(@theme_border, 0.55);
-  background: mix(@theme_bg, @theme_muted, 0.25);
+  border: 1px solid @hairline;
+  background: transparent;
 }
 
 .tool-card.failed {
@@ -1426,7 +1695,7 @@ window.chat-window button.tool-head image {
 
 .approval {
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: alpha(@theme_accent, 0.12);
   border: 1px solid alpha(@theme_accent, 0.45);
 }
@@ -1472,14 +1741,14 @@ window.chat-window button.tool-head image {
 }
 
 .md-code {
-  border-radius: 8px;
+  border-radius: 10px;
   background: alpha(@theme_shadow, 0.35);
-  border: 1px solid alpha(@theme_border, 0.45);
+  border: 1px solid @hairline;
 }
 
 .md-code-head {
   padding: 2px 6px 2px 12px;
-  border-bottom: 1px solid alpha(@theme_border, 0.35);
+  border-bottom: 1px solid @hairline;
   font-size: 0.82em;
 }
 
@@ -1489,13 +1758,13 @@ window.chat-window button.tool-head image {
 }
 
 .md-table {
-  border: 1px solid alpha(@theme_border, 0.55);
+  border: 1px solid @hairline;
   border-radius: 6px;
 }
 
 .md-cell {
   padding: 6px 10px;
-  border-bottom: 1px solid alpha(@theme_border, 0.35);
+  border-bottom: 1px solid @hairline;
 }
 
 .md-cell.head {
@@ -1522,15 +1791,14 @@ window.chat-window button.tool-head image {
 
 .composer {
   padding: 10px 10px 8px 14px;
-  border-radius: 14px;
-  background: mix(@theme_bg, @theme_muted, 0.25);
-  border: 1px solid alpha(@theme_border, 0.8);
-  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid @hairline;
+  transition: border-color 150ms ease-out;
 }
 
 .composer:focus-within {
-  border-color: alpha(@theme_accent, 0.72);
-  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38), 0 0 14px alpha(@theme_glow, 0.18);
+  border-color: @theme_accent;
 }
 
 textview.composer-text,
@@ -1573,9 +1841,9 @@ window.chat-window button.recording {
 
 .attach-chip {
   padding: 4px 4px 4px 6px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: alpha(@theme_bg, 0.6);
-  border: 1px solid alpha(@theme_border, 0.6);
+  border: 1px solid @hairline;
 }
 
 .suggest-row {
@@ -1586,8 +1854,8 @@ window.chat-window button.recording {
 
 .side-panel {
   min-width: 320px;
-  background: @theme_surface;
-  border-left: 1px solid alpha(@theme_border, 0.55);
+  background: @theme_bg;
+  border-left: 1px solid @hairline;
 }
 
 .panel-body,
@@ -1622,7 +1890,7 @@ window.chat-window button.recording {
 }
 
 .artifact-picture {
-  border-radius: 8px;
+  border-radius: 10px;
   background: alpha(@theme_bg, 0.5);
 }
 
@@ -1630,9 +1898,9 @@ window.chat-window button.recording {
 
 .json-view {
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: alpha(@theme_shadow, 0.25);
-  border: 1px solid alpha(@theme_border, 0.45);
+  border: 1px solid @hairline;
 }
 
 .json-badge {
@@ -1662,13 +1930,13 @@ window.chat-window button.recording {
 window.chat-window button.market-card {
   padding: 12px 14px;
   border-radius: 6px;
-  background: mix(@theme_bg, @theme_muted, 0.25);
-  border: 1px solid alpha(@theme_border, 0.55);
+  background: transparent;
+  border: 1px solid @hairline;
 }
 
 window.chat-window button.market-card:hover {
-  border-color: alpha(@theme_border, 0.95);
-  background: mix(@theme_bg, @theme_muted, 0.32);
+  border-color: @hairline;
+  background: @row_hover;
 }
 
 .market-detail-title {
@@ -1681,8 +1949,7 @@ window.chat-window button.market-card:hover {
 }
 
 .quant-row.recommended {
-  border-color: alpha(@theme_accent, 0.72);
-  box-shadow: 0 0 0 1px alpha(@theme_accent, 0.38), 0 0 14px alpha(@theme_glow, 0.24);
+  border-color: @theme_accent;
 }
 
 .quant-name {
@@ -1691,9 +1958,9 @@ window.chat-window button.market-card:hover {
 
 .readme-card {
   padding: 16px 20px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: mix(@theme_bg, @theme_surface, 0.5);
-  border: 1px solid alpha(@theme_border, 0.55);
+  border: 1px solid @hairline;
 }
 
 /* ---------- Arena and stats ---------- */
@@ -1704,9 +1971,9 @@ window.chat-window button.market-card:hover {
 
 .arena-row > .assistant-msg {
   padding: 12px 14px;
-  border-radius: 8px;
-  border: 1px solid alpha(@theme_border, 0.55);
-  background: mix(@theme_bg, @theme_muted, 0.12);
+  border-radius: 10px;
+  border: 1px solid @hairline;
+  background: transparent;
 }
 
 .arena-votes {
@@ -1724,9 +1991,9 @@ window.chat-window button.market-card:hover {
 
 .stat-tile {
   padding: 12px 14px 10px;
-  border-radius: 8px;
-  background: mix(@theme_bg, @theme_muted, 0.25);
-  border: 1px solid alpha(@theme_border, 0.55);
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid @hairline;
 }
 
 /* ---------- Quick ask ---------- */
@@ -1738,7 +2005,7 @@ window.chat-window button.market-card:hover {
 
 .quick-context {
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: alpha(@theme_accent, 0.08);
   border: 1px solid alpha(@theme_accent, 0.35);
 }
@@ -1760,7 +2027,6 @@ progressbar.model-load > trough > progress {
 
 progressbar.model-load.loaded > trough > progress {
   background: @theme_accent;
-  box-shadow: 0 0 6px alpha(@theme_glow, 0.45);
 }
 
 /* Message bar toggles: icon-only, quiet until on */
@@ -1777,7 +2043,7 @@ window.chat-window menubutton.bar-menu > button {
 
 window.chat-window button.bar-toggle:hover,
 window.chat-window menubutton.bar-menu > button:hover {
-  background: alpha(@theme_highlight, 0.55);
+  background: @row_hover;
   color: @theme_text;
 }
 

@@ -32,11 +32,7 @@ struct Market {
 }
 
 pub fn build() -> gtk::Widget {
-    let page = widgets::page(
-        "Marketplace",
-        "Find models on Hugging Face and in the Ollama library, and see which ones fit this computer.",
-        &[],
-    );
+    let page = widgets::page("marketplace");
 
     let stack = gtk::Stack::new();
     stack.set_transition_type(gtk::StackTransitionType::Crossfade);

@@ -31,7 +31,7 @@ fn one_line_title(row: &gtk::Box, full: &str) {
 type DownloadRow = (u64, State, gtk::LevelBar, gtk::Label);
 
 pub fn build() -> gtk::Widget {
-    let page = widgets::page("Models", "What's installed on this server, what's loaded, and what's downloading.", &[]);
+    let page = widgets::page("models");
 
     let banner = widgets::vbox(0);
     page.body.append(&banner);
@@ -169,7 +169,7 @@ pub fn build() -> gtk::Widget {
         move || {
             widgets::clear(&banner);
             if models::online() == Some(false) {
-                let b = widgets::banner(&format!("<b>Ollama isn't reachable.</b> {}", util::esc(&models::error())), true);
+                let b = widgets::banner(&crate::sections::chat::unreachable_markup(), true);
                 if crate::ollama::api::installed() {
                     for action in ["start", "restart"] {
                         let btn = gtk::Button::with_label(if action == "start" { "Start" } else { "Restart" });

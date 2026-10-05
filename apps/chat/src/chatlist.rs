@@ -15,18 +15,23 @@ thread_local! {
 }
 
 /// The list, driven by `search`. Every instance (sidebar, history popover)
-/// rebuilds itself when chats change.
-pub fn build(search: &gtk::SearchEntry) -> gtk::Widget {
+/// rebuilds itself when chats change. `scroll` wraps it in its own scroller
+/// (the popover); the sidebar scrolls it with the pages.
+pub fn build(search: &gtk::SearchEntry, scroll: bool) -> gtk::Widget {
     let outer = widgets::vbox(0);
     let list = widgets::vbox(1);
     list.add_css_class("chat-list");
-    let scroll = gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::Never)
-        .vscrollbar_policy(gtk::PolicyType::External)
-        .vexpand(true)
-        .child(&list)
-        .build();
-    outer.append(&scroll);
+    if scroll {
+        let sw = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vscrollbar_policy(gtk::PolicyType::External)
+            .vexpand(true)
+            .child(&list)
+            .build();
+        outer.append(&sw);
+    } else {
+        outer.append(&list);
+    }
 
     let query = Rc::new(RefCell::new(String::new()));
     let rebuild = {
@@ -61,6 +66,13 @@ pub fn build(search: &gtk::SearchEntry) -> gtk::Widget {
     outer.upcast()
 }
 
+/// A sidebar group label; dropping a chat on it takes it out of its folder.
+fn group_label(title: &str, add: window::NavAdd<'_>) -> gtk::Box {
+    let head = window::nav_group(title, false, add);
+    head.add_controller(drop_target(None));
+    head
+}
+
 fn fill(list: &gtk::Box, query: &str) {
     widgets::clear(list);
     if !query.is_empty() {
@@ -69,32 +81,29 @@ fn fill(list: &gtk::Box, query: &str) {
     }
     let archived = SHOW_ARCHIVED.with(|a| a.get());
     let chats = store::chats(archived).unwrap_or_default();
-    let folders = store::folders().unwrap_or_default();
 
-    let head = widgets::hbox(4);
-    head.add_css_class("chat-list-head");
-    let title = widgets::label(if archived { "ARCHIVED" } else { "CHATS" }, "nav-group");
-    title.set_hexpand(true);
-    head.append(&title);
-    if !archived {
-        let add = gtk::Button::from_icon_name("folder-new-symbolic");
-        add.add_css_class("flat");
-        add.add_css_class("tiny");
-        add.set_tooltip_text(Some("New folder"));
-        add.connect_clicked(|_| edit_folder(Folder::default()));
-        head.append(&add);
-    }
-    // Dropping a chat on the heading takes it out of its folder.
-    head.add_controller(drop_target(None));
-    list.append(&head);
+    if archived {
+        list.append(&group_label("Archived", None));
+        if chats.is_empty() {
+            list.append(&empty_note("Nothing archived."));
+        }
+        for c in &chats {
+            list.append(&chat_row(c));
+        }
+    } else {
+        let folders = store::folders().unwrap_or_default();
+        let pinned: Vec<&Chat> = chats.iter().filter(|c| c.pinned && c.folder.is_none()).collect();
+        if !pinned.is_empty() {
+            list.append(&group_label("Pinned", None));
+            for c in pinned {
+                list.append(&chat_row(c));
+            }
+        }
 
-    if chats.is_empty() && folders.is_empty() {
-        let l = widgets::label(if archived { "Nothing archived." } else { "Your chats will appear here." }, "dim");
-        l.add_css_class("chat-list-empty");
-        list.append(&l);
-    }
-
-    if !archived {
+        list.append(&group_label("Folders", Some(("New folder", Box::new(|| edit_folder(Folder::default()))))));
+        if folders.is_empty() {
+            list.append(&empty_note("Folders give their chats a model, prompt and tools."));
+        }
         for f in &folders {
             list.append(&folder_header(f));
             if !f.collapsed {
@@ -105,17 +114,21 @@ fn fill(list: &gtk::Box, query: &str) {
                 }
             }
         }
-    }
 
-    let loose: Vec<&Chat> = chats.iter().filter(|c| archived || c.folder.is_none()).collect();
-    let mut last_group = String::new();
-    for c in loose {
-        let group = if c.pinned && !archived { "Pinned".to_string() } else { date_group(c.updated) };
-        if group != last_group {
-            list.append(&widgets::label(&group.to_uppercase(), "chat-date-group"));
-            last_group = group;
+        list.append(&group_label("Chats", Some(("New chat (Ctrl+N)", Box::new(|| chat::new_chat(None))))));
+        let loose: Vec<&Chat> = chats.iter().filter(|c| !c.pinned && c.folder.is_none()).collect();
+        if loose.is_empty() {
+            list.append(&empty_note("Your chats will appear here."));
         }
-        list.append(&chat_row(c));
+        let mut last_group = String::new();
+        for c in loose {
+            let group = date_group(c.updated);
+            if group != last_group {
+                list.append(&widgets::label(&group, "chat-date-group"));
+                last_group = group;
+            }
+            list.append(&chat_row(c));
+        }
     }
 
     let n_archived = if archived { 0 } else { store::chats(true).map(|c| c.len()).unwrap_or(0) };
@@ -135,6 +148,12 @@ fn fill(list: &gtk::Box, query: &str) {
     }
 }
 
+fn empty_note(text: &str) -> gtk::Label {
+    let l = widgets::label(text, "chat-list-empty");
+    l.set_wrap(true);
+    l
+}
+
 fn date_group(ts: i64) -> String {
     use chrono::{Local, TimeZone};
     let Some(t) = Local.timestamp_opt(ts, 0).single() else { return "Older".into() };
@@ -150,7 +169,7 @@ fn date_group(ts: i64) -> String {
 
 fn fill_search(list: &gtk::Box, query: &str) {
     let hits = store::search(query).unwrap_or_default();
-    list.append(&widgets::label(&format!("{} RESULT{}", hits.len(), if hits.len() == 1 { "" } else { "S" }), "chat-date-group"));
+    list.append(&window::nav_group(&format!("{} result{}", hits.len(), if hits.len() == 1 { "" } else { "s" }), false, None));
     for h in hits {
         let b = gtk::Button::new();
         b.add_css_class("chat-item");

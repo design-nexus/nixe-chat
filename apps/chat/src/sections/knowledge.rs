@@ -6,11 +6,7 @@ use crate::ollama::api::Conn;
 use crate::{hub, models, prefs, pulls, rag, rt, store, tools, util, widgets, window};
 
 pub fn build() -> gtk::Widget {
-    let page = widgets::page(
-        "Knowledge",
-        "Collections of your documents. Attach one to a chat, or type # in the message box, and answers draw on it.",
-        &[],
-    );
+    let page = widgets::page("knowledge");
     let banner = widgets::vbox(0);
     page.body.append(&banner);
 

@@ -336,13 +336,6 @@ pub fn apply() {
     ACTIVE.with(|a| *a.borrow_mut() = Some(palette.clone()));
     let mut css = palette_css(&palette);
     css.push_str(STYLE);
-    if !prefs::get().glow {
-        css.push_str(
-            "\n.settings-option.search-hit, .theme-card.selected, .toast, .stat-tile.selected { box-shadow: 0 0 0 1px alpha(@theme_accent, 0.6); }\n\
-             window.chat-window scale > trough > slider { box-shadow: 0 0 0 1px alpha(@theme_accent, 0.72); }\n\
-             .composer:focus-within, .chat-item.active, .quant-row.recommended { box-shadow: 0 0 0 1px alpha(@theme_accent, 0.6); }\n",
-        );
-    }
     PROVIDER.with(|p| {
         if let Some(provider) = p.borrow().as_ref() {
             provider.load_from_string(&css);

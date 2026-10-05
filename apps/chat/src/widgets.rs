@@ -1,6 +1,6 @@
 //! Nexus-style building blocks: pages, groups and option rows.
 
-use crate::{cmd, paths};
+use crate::paths;
 use gtk::pango;
 use gtk::prelude::*;
 use std::cell::RefCell;
@@ -30,16 +30,9 @@ fn register(row: &impl IsA<gtk::Widget>, title: &str, desc: &str, keywords: &str
     });
 }
 
-/// The settings group a row sits in.
-pub fn group_of(w: &gtk::Widget) -> Option<gtk::Widget> {
-    let mut cur = w.parent();
-    while let Some(p) = cur {
-        if p.has_css_class("settings-group") {
-            return Some(p);
-        }
-        cur = p.parent();
-    }
-    None
+/// The words a row is found by in the settings search.
+pub fn search_text(row: &gtk::Widget) -> Option<String> {
+    SEARCH.with(|s| s.borrow().iter().find(|i| i.row.upgrade().as_ref() == Some(row)).map(|i| i.text.clone()))
 }
 
 // ---------- Page / group ----------
@@ -49,29 +42,12 @@ pub struct Page {
     pub body: gtk::Box,
 }
 
-pub fn page(title: &str, description: &str, files: &[PathBuf]) -> Page {
+/// A page of the main window. Its name shows in the top bar, so the page itself
+/// starts straight with its content.
+pub fn page(section: &str) -> Page {
     let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
     body.add_css_class("settings-page");
-
-    let header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    header.add_css_class("section-header");
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    text.set_hexpand(true);
-    let t = gtk::Label::new(Some(title));
-    t.add_css_class("section-title");
-    t.set_xalign(0.0);
-    let d = gtk::Label::new(Some(description));
-    d.add_css_class("section-description");
-    d.set_xalign(0.0);
-    d.set_wrap(true);
-    text.append(&t);
-    text.append(&d);
-    header.append(&text);
-    if !files.is_empty() {
-        header.append(&open_config_button(files));
-    }
-    body.append(&header);
-
+    body.add_css_class(&format!("page-{section}"));
     body.set_hexpand(true);
 
     let root = gtk::ScrolledWindow::builder()
@@ -88,13 +64,17 @@ impl Page {
     pub fn group(&self, title: &str) -> Group {
         let wrapper = gtk::Box::new(gtk::Orientation::Vertical, 0);
         wrapper.add_css_class("settings-group");
+        // The settings card lists groups by this name.
+        wrapper.set_widget_name(title);
         if !title.is_empty() {
             let l = gtk::Label::new(Some(&title.to_uppercase()));
             l.add_css_class("group-title");
             l.set_xalign(0.0);
             wrapper.append(&l);
         }
-        let list = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        // Rows join into one card, split by hairlines.
+        let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        list.add_css_class("group-list");
         wrapper.append(&list);
         self.body.append(&wrapper);
         Group { wrapper, list }
@@ -139,51 +119,6 @@ impl Group {
         // Notes sit just under the group title.
         self.wrapper.insert_child_after(&l, self.wrapper.first_child().as_ref());
     }
-}
-
-// ---------- Open config ----------
-
-pub fn open_config_button(files: &[PathBuf]) -> gtk::Widget {
-    let make_content = || {
-        let b = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        b.append(&gtk::Image::from_icon_name("text-editor-symbolic"));
-        b.append(&gtk::Label::new(Some("Open config")));
-        b
-    };
-    if files.len() == 1 {
-        let path = files[0].clone();
-        let button = gtk::Button::new();
-        button.set_child(Some(&make_content()));
-        button.add_css_class("open-config");
-        button.set_valign(gtk::Align::Center);
-        button.set_tooltip_text(Some(&paths::pretty(&path)));
-        button.connect_clicked(move |_| cmd::open_in_editor(&path));
-        return button.upcast();
-    }
-    let menu = gtk::MenuButton::new();
-    menu.set_child(Some(&make_content()));
-    menu.add_css_class("open-config");
-    menu.set_valign(gtk::Align::Center);
-    let list = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    let popover = gtk::Popover::new();
-    for path in files {
-        let b = gtk::Button::with_label(&paths::pretty(path));
-        b.add_css_class("flat");
-        if let Some(label) = b.child().and_downcast::<gtk::Label>() {
-            label.set_xalign(0.0);
-            label.add_css_class("mono");
-        }
-        let p = path.clone();
-        let pop = popover.clone();
-        b.connect_clicked(move |_| {
-            pop.popdown();
-            cmd::open_in_editor(&p);
-        });
-        list.append(&b);
-    }
-    popover.set_child(Some(&list));
-    menu.set_popover(Some(&popover));
-    menu.upcast()
 }
 
 // ---------- Rows ----------
@@ -263,6 +198,22 @@ pub fn button_row(title: &str, desc: &str, label: &str, on_click: impl Fn(&gtk::
     b.connect_clicked(on_click);
     let r = row(title, desc, Some(b.upcast_ref()));
     (r, b)
+}
+
+/// A flat icon button with a tooltip.
+pub fn icon_button(icon: &str, tooltip: &str) -> gtk::Button {
+    let b = gtk::Button::from_icon_name(icon);
+    b.add_css_class("flat");
+    b.set_tooltip_text(Some(tooltip));
+    b.set_valign(gtk::Align::Center);
+    b
+}
+
+/// A 30 px icon button for the top bar.
+pub fn bar_button(icon: &str, tooltip: &str) -> gtk::Button {
+    let b = icon_button(icon, tooltip);
+    b.add_css_class("bar-button");
+    b
 }
 
 pub fn hbox(spacing: i32) -> gtk::Box {
@@ -355,7 +306,7 @@ pub fn dialog(title: &str, width: i32) -> (gtk::Window, gtk::Box) {
     dialog.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
     let card = vbox(12);
     card.add_css_class("dialog-card");
-    card.append(&label(title, "section-title"));
+    card.append(&label(title, "dialog-title"));
     dialog.set_child(Some(&card));
     let keys = gtk::EventControllerKey::new();
     let d = dialog.clone();

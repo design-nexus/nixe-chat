@@ -6,87 +6,24 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::prefs::{self, Host, McpServer};
-use crate::widgets::{self, Group, Page, SEARCH};
+use crate::widgets::{self, Group, Page};
 use crate::{hub, models, paths, store, theme, tools, transfer, util, voice, window};
 
-thread_local! {
-    static SEARCH_ENTRY: RefCell<Option<gtk::SearchEntry>> = const { RefCell::new(None) };
-    static ROOT: RefCell<Option<gtk::Widget>> = const { RefCell::new(None) };
-}
-
-pub fn focus_search() {
-    if let Some(e) = SEARCH_ENTRY.with(|s| s.borrow().clone()) {
-        e.grab_focus();
-    }
-}
-
-pub fn build() -> gtk::Widget {
-    let page = widgets::page(
-        "Settings",
-        "How chats behave, which tools models can use, and how this window looks.",
-        &[paths::prefs_file()],
-    );
-    let search = gtk::SearchEntry::new();
-    search.set_placeholder_text(Some("Search settings"));
-    search.add_css_class("settings-search");
-    search.set_margin_top(10);
-    page.body.append(&search);
-    SEARCH_ENTRY.with(|s| *s.borrow_mut() = Some(search.clone()));
-    ROOT.with(|r| *r.borrow_mut() = Some(page.root.clone().upcast()));
-    search.connect_search_changed(|e| filter(&e.text()));
-
-    this_window(&page);
-    connection(&page);
-    chat_defaults(&page);
-    tools_group(&page);
-    web_search(&page);
-    location(&page);
-    memories(&page);
-    knowledge(&page);
-    voice_group(&page);
-    quick_ask(&page);
-    mcp(&page);
-    data(&page);
-    page.root.upcast()
-}
-
-fn filter(query: &str) {
-    let q = query.trim().to_lowercase();
-    let terms: Vec<&str> = q.split_whitespace().collect();
-    let Some(root) = ROOT.with(|r| r.borrow().clone()) else { return };
-    let items: Vec<(gtk::Widget, String)> = SEARCH.with(|s| {
-        s.borrow().iter().filter_map(|i| Some((i.row.upgrade()?, i.text.clone()))).filter(|(w, _)| w.is_ancestor(&root)).collect()
-    });
-    let mut groups: Vec<(gtk::Widget, bool)> = Vec::new();
-    let mut first: Option<gtk::Widget> = None;
-    for (row, text) in &items {
-        let hit = terms.iter().all(|t| text.contains(t));
-        row.set_visible(hit);
-        row.remove_css_class("search-hit");
-        if hit && !terms.is_empty() && first.is_none() {
-            row.add_css_class("search-hit");
-            first = Some(row.clone());
-        }
-        if let Some(g) = widgets::group_of(row) {
-            match groups.iter_mut().find(|(w, _)| *w == g) {
-                Some(e) => e.1 |= hit,
-                None => groups.push((g, hit)),
-            }
-        }
-    }
-    for (g, visible) in groups {
-        g.set_visible(visible || terms.is_empty());
-    }
-    if let Some(row) = first {
-        glib::idle_add_local_once(move || {
-            if let Some(sw) = row.ancestor(gtk::ScrolledWindow::static_type()).and_downcast::<gtk::ScrolledWindow>()
-                && let Some(child) = sw.child()
-                && let Some(p) = row.compute_point(&child, &gtk::graphene::Point::new(0.0, 0.0))
-            {
-                sw.vadjustment().set_value((p.y() as f64 - 80.0).max(0.0));
-            }
-        });
-    }
+/// Fill `page` with every settings group; the settings card shows one at a time.
+pub fn build(page: &Page) {
+    this_window(page);
+    connection(page);
+    chat_defaults(page);
+    tools_group(page);
+    web_search(page);
+    location(page);
+    memories(page);
+    knowledge(page);
+    voice_group(page);
+    quick_ask(page);
+    mcp(page);
+    keyboard(page);
+    data(page);
 }
 
 /// A card with the text above a wide control (text areas, lists).
@@ -166,7 +103,7 @@ fn slider_row(
 // ---------- This window ----------
 
 fn this_window(page: &Page) {
-    let g = page.group("This window");
+    let g = page.group("Chat window");
     let p = prefs::get();
     let options: Vec<(String, String)> = theme::all().iter().map(|t| (t.id.clone(), t.name.clone())).collect();
     let (theme_row, theme_dd) = widgets::choice_row(
@@ -187,7 +124,7 @@ fn this_window(page: &Page) {
         let dd = theme_dd.clone();
         let (r, _) = widgets::switch_row(
             "Follow Omarchy theme",
-            "Match the desktop's colours and update live whenever the Omarchy theme changes.",
+            "Match the desktop's colors and update live whenever the Omarchy theme changes.",
             p.mode == prefs::ThemeMode::Omarchy,
             move |on| {
                 prefs::update(|p| p.mode = if on { prefs::ThemeMode::Omarchy } else { prefs::ThemeMode::Theme });
@@ -212,7 +149,7 @@ fn this_window(page: &Page) {
     };
     draw();
     hub::on(&hub::THEME, &swatches, draw);
-    g.add(&widgets::row("Current colours", "", Some(swatches.upcast_ref())));
+    g.add(&widgets::row("Current colors", "", Some(swatches.upcast_ref())));
     let (r, _) = widgets::switch_row("Glow", "Soft accent glow around focused and selected elements.", p.glow, |on| {
         prefs::update(|p| p.glow = on);
         theme::apply();
@@ -944,6 +881,15 @@ fn quick_ask(page: &Page) {
         "In this window, drag out an area to attach it. <tt>chat --screenshot</tt> does the same from a shortcut.",
         Some(shot.upcast_ref()),
     ));
+}
+
+// ---------- Keyboard ----------
+
+fn keyboard(page: &Page) {
+    let g = page.group("Keyboard");
+    for (keys, what) in window::SHORTCUTS {
+        g.add(&widgets::row(what, "", Some(widgets::keys(keys).upcast_ref())));
+    }
 }
 
 // ---------- MCP ----------

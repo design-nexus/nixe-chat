@@ -80,6 +80,25 @@ pub fn current_id() -> Option<i64> {
     page().and_then(|p| p.st.borrow().id())
 }
 
+/// The chat on screen's title, for the top bar.
+pub fn title() -> String {
+    page().map(|p| p.st.borrow().chat().title.clone()).filter(|t| !t.is_empty()).unwrap_or_else(|| "New chat".into())
+}
+
+/// The status bar's readout on the chat page: the model, and the last reply's
+/// speed and length.
+pub fn status_text() -> String {
+    let Some(p) = page() else { return String::new() };
+    let st = p.st.borrow();
+    let model = crate::util::model_label(&st.chat().model);
+    let last = st.all.iter().rev().find(|m| m.role == "assistant" && m.tokens > 0);
+    match last {
+        Some(m) if m.tps > 0.0 => format!("{model} · {:.0} tok/s · {} tokens", m.tps, m.tokens),
+        Some(m) => format!("{model} · {} tokens", m.tokens),
+        None => model,
+    }
+}
+
 fn draft_chat(folder: Option<i64>) -> Chat {
     let f = folder.and_then(store::folder);
     let model = f.as_ref().map(|f| f.model.clone()).filter(|m| !m.is_empty()).unwrap_or_else(models::default_model);
@@ -94,16 +113,13 @@ pub fn build() -> gtk::Widget {
     let root = widgets::vbox(0);
     root.add_css_class("chat-page");
 
-    // ----- Header -----
-    // Title on the left, the model picker centred, actions on the right.
-    let header = gtk::CenterBox::new();
+    // ----- Toolbar -----
+    // The model picker on the left, the chat's actions on the right.
+    let header = widgets::hbox(6);
+    header.add_css_class("toolbar");
     header.add_css_class("chat-header");
-    let start = widgets::hbox(8);
-    let end = widgets::hbox(8);
-    header.set_start_widget(Some(&start));
-    header.set_end_widget(Some(&end));
     let history_btn = gtk::MenuButton::new();
-    history_btn.set_icon_name("sidebar-show-symbolic");
+    history_btn.set_icon_name("view-list-symbolic");
     history_btn.add_css_class("flat");
     history_btn.set_tooltip_text(Some("Chats"));
     history_btn.set_visible(false);
@@ -123,18 +139,12 @@ pub fn build() -> gtk::Widget {
     });
     hist.append(&new_btn);
     hist.append(&hsearch);
-    let hlist = chatlist::build(&hsearch);
+    let hlist = chatlist::build(&hsearch, true);
     hlist.set_vexpand(true);
     hist.append(&hlist);
     pop.set_child(Some(&hist));
     history_btn.set_popover(Some(&pop));
-    start.append(&history_btn);
-
-
-    let caps = widgets::hbox(4);
-    caps.add_css_class("caps");
-    caps.set_valign(gtk::Align::Center);
-    end.append(&caps);
+    header.append(&history_btn);
 
     let picker = widgets::vbox(3);
     picker.set_valign(gtk::Align::Center);
@@ -148,19 +158,28 @@ pub fn build() -> gtk::Widget {
     load_bar.add_css_class("model-load");
     load_bar.set_pulse_step(0.12);
     picker.append(&load_bar);
-    header.set_center_widget(Some(&picker));
+    header.append(&picker);
+
+    let spacer = widgets::hbox(0);
+    spacer.set_hexpand(true);
+    header.append(&spacer);
+
+    let caps = widgets::hbox(4);
+    caps.add_css_class("caps");
+    caps.set_valign(gtk::Align::Center);
+    header.append(&caps);
 
     let compare_btn = gtk::MenuButton::new();
     compare_btn.set_icon_name("list-add-symbolic");
     compare_btn.add_css_class("flat");
     compare_btn.set_tooltip_text(Some("Compare with other models"));
-    end.append(&compare_btn);
+    header.append(&compare_btn);
 
     let settings_btn = gtk::ToggleButton::new();
-    settings_btn.set_icon_name("emblem-system-symbolic");
+    settings_btn.set_icon_name("preferences-other-symbolic");
     settings_btn.add_css_class("flat");
-    settings_btn.set_tooltip_text(Some("Chat settings"));
-    end.append(&settings_btn);
+    settings_btn.set_tooltip_text(Some("This chat's prompt and parameters"));
+    header.append(&settings_btn);
 
     let more = gtk::MenuButton::new();
     more.set_icon_name("view-more-symbolic");
@@ -178,7 +197,7 @@ pub fn build() -> gtk::Widget {
             }
         }
     });
-    end.append(&more);
+    header.append(&more);
     root.append(&header);
 
     let banners = widgets::vbox(0);
@@ -390,7 +409,7 @@ pub fn build() -> gtk::Widget {
         let caps = pg.caps.clone();
         move |narrow| {
             hb.set_visible(narrow);
-            // The capability tags don't fit beside a centred picker in a narrow window.
+            // The capability tags don't fit beside the picker in a narrow window.
             caps.set_visible(!narrow);
             lb.set_orientation(if narrow { gtk::Orientation::Vertical } else { gtk::Orientation::Horizontal });
         }
@@ -508,14 +527,18 @@ pub(crate) fn refresh_header(p: &Page) {
     if !model.is_empty() && !list.contains(&model) {
         list.insert(0, model.clone());
     }
-    if *p.model_list.borrow() != list {
+    if list.is_empty() {
+        p.model_list.borrow_mut().clear();
+        p.model_dd.set_model(Some(&gtk::StringList::new(&["No models"])));
+        p.model_dd.set_selected(0);
+    } else if *p.model_list.borrow() != list {
         let labels: Vec<String> = list.iter().map(|m| crate::util::clip_middle(&crate::util::model_label(m), 48)).collect();
         let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
         *p.model_list.borrow_mut() = list.clone();
         p.model_dd.set_model(Some(&gtk::StringList::new(&refs)));
     }
     let idx = list.iter().position(|m| *m == model).map(|i| i as u32).unwrap_or(gtk::INVALID_LIST_POSITION);
-    if p.model_dd.selected() != idx {
+    if !list.is_empty() && p.model_dd.selected() != idx {
         p.model_dd.set_selected(idx);
     }
     p.model_dd.set_sensitive(!list.is_empty());
@@ -534,6 +557,8 @@ pub(crate) fn refresh_header(p: &Page) {
     p.composer.refresh();
     refresh_load(p);
     view::refresh_empty(p);
+    window::refresh_crumb();
+    window::refresh_note();
 }
 
 /// The bar under the picker: pulsing while the model loads, full when it's
@@ -584,7 +609,7 @@ pub(crate) fn refresh_banners(p: &Page) {
         Some(false) => {
             let local =
                 prefs::get().active_host == 0 && crate::prefs::normalize_host(&prefs::get().host().url).contains("127.0.0.1");
-            let b = widgets::banner(&format!("<b>Ollama isn't reachable.</b> {}", crate::util::esc(&models::error())), true);
+            let b = widgets::banner(&unreachable_markup(), true);
             if local && crate::ollama::api::installed() {
                 let start = gtk::Button::with_label("Start Ollama");
                 start.set_valign(gtk::Align::Center);
@@ -639,6 +664,14 @@ pub(crate) fn refresh_banners(p: &Page) {
         }
         None => {}
     }
+}
+
+/// The offline banner's text: a bold lead-in, then the error without repeating it.
+pub(crate) fn unreachable_markup() -> String {
+    const LEAD: &str = "Ollama isn't reachable.";
+    let err = models::error();
+    let rest = err.strip_prefix(LEAD).unwrap_or(&err).trim();
+    format!("<b>{LEAD}</b> {}", crate::util::esc(rest))
 }
 
 /// Rebuild the conversation from the store.

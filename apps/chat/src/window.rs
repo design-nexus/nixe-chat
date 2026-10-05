@@ -1,5 +1,5 @@
-//! The main window: a sidebar with pages and the chat list, and a stack of
-//! pages built the first time they're shown.
+//! The main window: a top bar, a sidebar with the pages and the chat list, a
+//! stack of pages built the first time they're shown, and a status bar.
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
@@ -8,16 +8,24 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::sections::{self, Section};
-use crate::{chatlist, hub, models, prefs, pulls, theme, widgets};
+use crate::{chatlist, hub, models, prefs, pulls, settings_dialog, theme, widgets};
 
 struct Ui {
     window: gtk::ApplicationWindow,
     stack: gtk::Stack,
+    nav: gtk::Box,
     nav_items: HashMap<&'static str, gtk::Button>,
     pages: HashMap<&'static str, gtk::Widget>,
     sections: Vec<Section>,
     current: &'static str,
+    /// Pages visited before this one, for Alt+←.
+    history: Vec<&'static str>,
     overlay: gtk::Overlay,
+    /// The page name in the top bar.
+    crumb: gtk::Label,
+    search: gtk::SearchEntry,
+    /// The page's description in the status bar (or the chat's live readout).
+    status_note: gtk::Label,
 }
 
 type NarrowHook = Box<dyn Fn(bool)>;
@@ -34,6 +42,10 @@ fn ui() -> Option<Rc<RefCell<Ui>>> {
 
 pub fn window() -> Option<gtk::ApplicationWindow> {
     ui().map(|u| u.borrow().window.clone())
+}
+
+pub fn overlay() -> Option<gtk::Overlay> {
+    ui().map(|u| u.borrow().overlay.clone())
 }
 
 pub fn current() -> &'static str {
@@ -85,6 +97,10 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
     init();
     build(app);
     let start = section.map(String::from).unwrap_or_else(|| prefs::get().last_section);
+    // Settings opens over the page you were on.
+    if start == "settings" {
+        navigate(&prefs::get().last_section);
+    }
     navigate(&start);
     if let Some(out) = std::env::var_os("CHAT_SNAPSHOT") {
         snapshot_and_quit(app, std::path::PathBuf::from(out));
@@ -121,223 +137,260 @@ fn install_icons() {
     }
 }
 
+fn nav_button(icon: &str, title: &str) -> (gtk::Button, gtk::Box) {
+    let button = gtk::Button::new();
+    button.add_css_class("nav-item");
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    content.append(&gtk::Image::from_icon_name(icon));
+    let l = widgets::label(title, "nav-label");
+    l.set_hexpand(true);
+    l.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    l.add_css_class("compact-hide");
+    content.append(&l);
+    button.set_child(Some(&content));
+    button.set_tooltip_text(Some(title));
+    (button, content)
+}
+
+/// A group label's `+` button: its tooltip and what it does.
+pub type NavAdd<'a> = Option<(&'a str, Box<dyn Fn()>)>;
+
+/// A small UPPERCASE group label for the sidebar, with an optional flat `+`.
+pub fn nav_group(title: &str, first: bool, add: NavAdd<'_>) -> gtk::Box {
+    let row = widgets::hbox(4);
+    row.add_css_class("nav-group");
+    if first {
+        row.add_css_class("first");
+    }
+    let l = widgets::label(&title.to_uppercase(), "nav-group-label");
+    l.set_hexpand(true);
+    l.add_css_class("compact-hide");
+    row.append(&l);
+    if let Some((tip, f)) = add {
+        let b = widgets::icon_button("list-add-symbolic", tip);
+        b.add_css_class("nav-add");
+        b.add_css_class("compact-hide");
+        b.connect_clicked(move |_| f());
+        row.append(&b);
+    }
+    row
+}
+
 fn build(app: &gtk::Application) {
-    let window = gtk::ApplicationWindow::builder().application(app).title("Chat").default_width(1180).default_height(820).build();
+    let window = gtk::ApplicationWindow::builder().application(app).title("Chat").default_width(1120).default_height(800).build();
     window.add_css_class("chat-window");
+    // No client-side titlebar: Hyprland manages the window.
     window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
     window.set_icon_name(Some("io.github.design_nexus.Chat"));
 
     let sections = sections::all();
+    let (top, crumb, search) = top_bar(&window);
 
     // ----- Sidebar -----
     let nav = gtk::Box::new(gtk::Orientation::Vertical, 0);
     nav.add_css_class("settings-navigation");
     nav.set_hexpand(false);
-    let mut compact_hide: Vec<gtk::Widget> = Vec::new();
-
-    let head = widgets::hbox(6);
-    head.add_css_class("nav-head");
-    let heading = widgets::label("CHAT", "menu-heading");
-    heading.set_hexpand(true);
-    head.append(&heading);
-    let new_chat = gtk::Button::from_icon_name("document-new-symbolic");
-    new_chat.add_css_class("flat");
-    new_chat.add_css_class("new-chat");
-    new_chat.set_valign(gtk::Align::Center);
-    new_chat.set_tooltip_text(Some("New chat (Ctrl+N)"));
-    new_chat.connect_clicked(|_| sections::chat::new_chat(None));
-    head.append(&new_chat);
-    let collapse = gtk::Button::from_icon_name("sidebar-show-symbolic");
-    collapse.add_css_class("nav-collapse");
-    collapse.set_tooltip_text(Some("Collapse or expand the sidebar (Ctrl+B)"));
-    collapse.set_valign(gtk::Align::Center);
-    collapse.connect_clicked(|_| toggle_sidebar());
-    head.append(&collapse);
-    nav.append(&head);
-    compact_hide.push(heading.clone().upcast());
-
-    let search = gtk::SearchEntry::new();
-    search.set_placeholder_text(Some("Search chats"));
-    search.add_css_class("settings-search");
-    nav.append(&search);
-    compact_hide.push(search.clone().upcast());
-
-    let mut nav_items = HashMap::new();
     let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let mut nav_items = HashMap::new();
+    let mut last_group = "";
     for s in &sections {
-        let button = gtk::Button::new();
-        button.add_css_class("nav-item");
-        let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        content.append(&gtk::Image::from_icon_name(s.icon));
-        let l = widgets::label(s.title, "nav-label");
-        l.set_hexpand(true);
-        compact_hide.push(l.clone().upcast());
-        content.append(&l);
+        if s.group != last_group {
+            list.append(&nav_group(s.group, last_group.is_empty(), None));
+            last_group = s.group;
+        }
+        let (button, content) = nav_button(s.icon, s.title);
         if s.id == "models" {
             // Active downloads.
             let r = widgets::label("", "nav-readout");
-            r.add_css_class("mono");
+            r.add_css_class("compact-hide");
             let r2 = r.clone();
             hub::on(&hub::PULLS, &r, move || {
                 let n = pulls::active_count();
                 r2.set_text(&if n > 0 { format!("↓{n}") } else { String::new() });
             });
-            compact_hide.push(r.clone().upcast());
             content.append(&r);
         }
-        button.set_child(Some(&content));
-        button.set_tooltip_text(Some(s.title));
         let id = s.id;
         button.connect_clicked(move |_| navigate(id));
         list.append(&button);
         nav_items.insert(s.id, button);
     }
-    nav.append(&list);
-
-    // The chat list fills the rest of the sidebar.
-    let chats = chatlist::build(&search);
-    chats.set_vexpand(true);
-    nav.append(&chats);
-    compact_hide.push(chats.clone().upcast());
-    let spacer = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    spacer.set_vexpand(true);
-    spacer.set_visible(false);
-    nav.append(&spacer);
-
-    let footer = footer();
-    nav.append(&footer);
-    compact_hide.push(footer.clone().upcast());
+    // The chats follow the pages, driven by the search in the top bar.
+    let chats = chatlist::build(&search, false);
+    chats.add_css_class("compact-hide");
+    list.append(&chats);
+    let nav_scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        // Scrolls with wheel, trackpad and keyboard; no visible scrollbar.
+        .vscrollbar_policy(gtk::PolicyType::External)
+        .vexpand(true)
+        .child(&list)
+        .build();
+    nav.append(&nav_scroll);
 
     // ----- Content -----
     let stack = gtk::Stack::new();
     stack.add_css_class("settings-content");
     stack.set_hexpand(true);
+    stack.set_vexpand(true);
     stack.set_transition_type(gtk::StackTransitionType::Crossfade);
     stack.set_transition_duration(if prefs::get().reduce_motion { 0 } else { 160 });
 
     let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    body.set_vexpand(true);
     body.append(&nav);
     body.append(&stack);
 
+    let (status, status_note) = status_bar();
+    let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    frame.add_css_class("window-frame");
+    frame.append(&top);
+    frame.append(&body);
+    frame.append(&status);
+
     let overlay = gtk::Overlay::new();
-    overlay.set_child(Some(&body));
+    overlay.set_child(Some(&frame));
     window.set_child(Some(&overlay));
 
-    // ----- Keys -----
-    let keys = gtk::EventControllerKey::new();
-    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-    let s2 = search.clone();
-    let w2 = window.clone();
-    keys.connect_key_pressed(move |_, key, _, mods| {
-        let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
-        let shift = mods.contains(gdk::ModifierType::SHIFT_MASK);
-        match key {
-            gdk::Key::f if ctrl => {
-                if current() == "settings" {
-                    sections::settings::focus_search();
-                } else if narrow() {
-                    navigate("chat");
-                    sections::chat::open_history();
-                } else {
-                    s2.grab_focus();
-                }
-                glib::Propagation::Stop
-            }
-            gdk::Key::n if ctrl => {
-                sections::chat::new_chat(None);
-                glib::Propagation::Stop
-            }
-            gdk::Key::b if ctrl => {
-                toggle_sidebar();
-                glib::Propagation::Stop
-            }
-            gdk::Key::q | gdk::Key::w if ctrl => {
-                w2.close();
-                glib::Propagation::Stop
-            }
-            gdk::Key::comma if ctrl => {
-                navigate("settings");
-                glib::Propagation::Stop
-            }
-            gdk::Key::space if ctrl => {
-                if current() == "chat" {
-                    sections::chat::toggle_dictation();
-                    glib::Propagation::Stop
-                } else {
-                    glib::Propagation::Proceed
-                }
-            }
-            gdk::Key::S if ctrl && shift => {
-                sections::chat::screenshot();
-                glib::Propagation::Stop
-            }
-            gdk::Key::Escape if s2.has_focus() || s2.focus_child().is_some() => {
-                s2.set_text("");
-                glib::Propagation::Proceed
-            }
-            _ => glib::Propagation::Proceed,
-        }
-    });
-    window.add_controller(keys);
+    install_keys(&window, &search);
 
     // Narrow windows (a tiled half-screen) get an icon-only sidebar.
-    SIDEBAR.with(|s| {
-        *s.borrow_mut() = Some(Sidebar {
-            nav: nav.clone(),
-            head: head.clone(),
-            spacer: spacer.clone(),
-            new_chat: new_chat.clone(),
-            collapse: collapse.clone(),
-            hide: compact_hide,
-        })
-    });
     let apply_width = {
         let nav = nav.clone();
         move |w: &gtk::ApplicationWindow| {
             let width = if w.width() > 0 { w.width() } else { w.default_width() };
             let narrow = width > 0 && width < 980;
+            settings_dialog::fit(w);
             if narrow == NARROW.with(|n| n.get()) && nav.has_css_class("sized") {
                 return;
             }
             nav.add_css_class("sized");
             set_narrow(narrow);
-            apply_compact(narrow || prefs::get().sidebar_collapsed);
+            apply_compact(&nav, narrow || prefs::get().sidebar_collapsed);
         }
     };
     let aw = apply_width.clone();
     window.connect_default_width_notify(move |w| aw(w));
     let aw = apply_width.clone();
     window.connect_realize(move |w| aw(w));
+    // Tiled windows are resized by the compositor; watch the real size too.
     let w2 = window.clone();
     glib::timeout_add_local(std::time::Duration::from_millis(400), move || {
         apply_width(&w2);
         glib::ControlFlow::Continue
     });
 
-    let ui = Ui { window, stack, nav_items, pages: HashMap::new(), sections, current: "", overlay };
+    let ui = Ui {
+        window,
+        stack,
+        nav,
+        nav_items,
+        pages: HashMap::new(),
+        sections,
+        current: "",
+        history: Vec::new(),
+        overlay,
+        crumb,
+        search,
+        status_note,
+    };
     UI.with(|u| *u.borrow_mut() = Some(Rc::new(RefCell::new(ui))));
 }
 
-/// Server switcher and reachability, above the version.
-fn footer() -> gtk::Box {
-    let footer = widgets::vbox(6);
-    footer.add_css_class("nav-footer");
-    let row = widgets::hbox(8);
+/// The bar across the top: the sidebar toggle and where you are on the left;
+/// search, settings and close on the right.
+fn top_bar(window: &gtk::ApplicationWindow) -> (gtk::Box, gtk::Label, gtk::SearchEntry) {
+    let bar = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+    bar.add_css_class("top-bar");
+    let toggle = widgets::bar_button("sidebar-show-symbolic", "Collapse or expand the sidebar (Ctrl+B)");
+    toggle.connect_clicked(|_| toggle_sidebar());
+    bar.append(&toggle);
+
+    let crumbs = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    crumbs.add_css_class("crumbs");
+    crumbs.append(&widgets::label("Chat", "crumb-root"));
+    crumbs.append(&widgets::label("/", "crumb-sep"));
+    let crumb = widgets::label("", "crumb");
+    crumb.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    crumbs.append(&crumb);
+    crumbs.set_hexpand(true);
+    bar.append(&crumbs);
+
+    let search = gtk::SearchEntry::new();
+    search.set_placeholder_text(Some("Search chats"));
+    search.add_css_class("bar-search");
+    search.set_width_chars(22);
+    search.set_visible(false);
+    bar.append(&search);
+    let find = widgets::bar_button("system-search-symbolic", "Search chats (Ctrl+F)");
+    find.connect_clicked(|_| open_search());
+    bar.append(&find);
+    search.connect_stop_search(|e| {
+        e.set_text("");
+        e.set_visible(false);
+    });
+
+    let gear = widgets::bar_button("emblem-system-symbolic", "Settings (Ctrl+,)");
+    gear.connect_clicked(|_| settings_dialog::open());
+    bar.append(&gear);
+    let close = widgets::bar_button("window-close-symbolic", "Close (Ctrl+Q)");
+    let w = window.clone();
+    close.connect_clicked(move |_| w.close());
+    bar.append(&close);
+    (bar, crumb, search)
+}
+
+/// Show the chat search. In the icon-only sidebar the results have nowhere to
+/// go, so the chat page's history popover opens instead.
+fn open_search() {
+    let Some(ui) = ui() else { return };
+    let compact = ui.borrow().nav.has_css_class("compact");
+    if compact {
+        navigate("chat");
+        sections::chat::open_history();
+        return;
+    }
+    let s = ui.borrow().search.clone();
+    if s.is_visible() && s.text().is_empty() && s.has_focus() {
+        s.set_visible(false);
+    } else {
+        s.set_visible(true);
+        s.grab_focus();
+    }
+}
+
+/// The bar along the bottom: the shortcuts on the left, then the page's note,
+/// and the server on the right.
+fn status_bar() -> (gtk::Box, gtk::Label) {
+    let bar = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    bar.add_css_class("status-bar");
+    let help = gtk::Button::new();
+    help.add_css_class("status-help");
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    content.append(&widgets::label("F1", "status-key"));
+    content.append(&widgets::label("Shortcuts", ""));
+    help.set_child(Some(&content));
+    help.set_tooltip_text(Some("Show the keyboard shortcuts"));
+    help.connect_clicked(|_| show_shortcuts());
+    bar.append(&help);
+
+    let note = widgets::label("", "status-note");
+    note.set_hexpand(true);
+    note.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    bar.append(&note);
+
     let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     dot.add_css_class("status-dot");
     dot.set_valign(gtk::Align::Center);
-    let status = widgets::label("Connecting…", "dim");
-    status.add_css_class("small-text");
-    status.set_hexpand(true);
-    status.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    row.append(&dot);
-    row.append(&status);
-    footer.append(&row);
+    bar.append(&dot);
+    let readout = widgets::label("Connecting…", "status-readout");
+    readout.set_ellipsize(gtk::pango::EllipsizeMode::Start);
+    bar.append(&readout);
 
     let hosts = gtk::DropDown::from_strings(&[]);
     hosts.add_css_class("host-switcher");
     hosts.set_tooltip_text(Some("Ollama server"));
-    footer.append(&hosts);
+    bar.append(&hosts);
     let fill_hosts = {
         let hosts = hosts.clone();
         move || {
@@ -358,34 +411,183 @@ fn footer() -> gtk::Box {
     });
     hub::on(&hub::HOST, &hosts, fill_hosts);
 
-    let version = widgets::label(concat!("Chat ", env!("CARGO_PKG_VERSION")), "dim");
-    version.add_css_class("small-text");
-    footer.append(&version);
-
     let refresh = {
-        let (dot, status) = (dot.clone(), status.clone());
+        let (dot, readout, hosts) = (dot.clone(), readout.clone(), hosts.clone());
         move || {
-            let host = prefs::get().host();
+            let p = prefs::get();
+            let host = p.host();
+            // With several servers the dropdown names the server.
+            let name = if p.hosts.len() > 1 { String::new() } else { format!("{} · ", host.name) };
             dot.remove_css_class("on");
             dot.remove_css_class("off");
-            match models::online() {
+            let mut text = match models::online() {
                 Some(true) => {
                     dot.add_css_class("on");
                     let n = models::installed().len();
-                    status.set_text(&format!("{} · {n} model{}", host.name, if n == 1 { "" } else { "s" }));
+                    format!("{name}{n} model{}", if n == 1 { "" } else { "s" })
                 }
                 Some(false) => {
                     dot.add_css_class("off");
-                    status.set_text(&format!("{} · offline", host.name));
+                    format!("{name}offline")
                 }
-                None => status.set_text("Connecting…"),
+                None => "Connecting…".to_string(),
+            };
+            let downloads = pulls::active_count();
+            if downloads > 0 {
+                text.push_str(&format!(" · ↓{downloads}"));
             }
-            status.set_tooltip_text(Some(&crate::prefs::normalize_host(&host.url)));
+            readout.set_text(&text);
+            let url = crate::prefs::normalize_host(&host.url);
+            readout.set_tooltip_text(Some(&url));
+            hosts.set_tooltip_text(Some(&url));
         }
     };
     refresh();
-    hub::on(&hub::MODELS, &footer, refresh);
-    footer
+    let r = refresh.clone();
+    hub::on(&hub::MODELS, &readout, r);
+    let r = refresh.clone();
+    hub::on(&hub::PULLS, &dot, r);
+    hub::on(&hub::HOST, &bar, refresh);
+    (bar, note)
+}
+
+/// Every keyboard shortcut, for the F1 list and Settings → Keyboard.
+pub const SHORTCUTS: &[(&[&str], &str)] = &[
+    (&["Enter"], "Send (Shift+Enter for a new line; swappable in Settings)"),
+    (&["Esc"], "Stop the reply, clear the search, or close"),
+    (&["Ctrl", "N"], "New chat"),
+    (&["Ctrl", "F"], "Search chats"),
+    (&["Ctrl", "Space"], "Dictate"),
+    (&["Ctrl", "Shift", "S"], "Screenshot into the chat"),
+    (&["Ctrl", "1–7"], "Go to a page in the sidebar"),
+    (&["Alt", "←"], "Back"),
+    (&["Ctrl", "B"], "Collapse or expand the sidebar"),
+    (&["Ctrl", ","], "Settings"),
+    (&["F1"], "Show these shortcuts"),
+    (&["Ctrl", "Q"], "Close"),
+];
+
+/// The shortcuts in a dialog.
+pub fn show_shortcuts() {
+    let (dialog, card) = widgets::dialog("Keyboard shortcuts", 480);
+    let list = widgets::vbox(0);
+    list.add_css_class("group-list");
+    for (keys, what) in SHORTCUTS {
+        list.append(&widgets::row(what, "", Some(widgets::keys(keys).upcast_ref())));
+    }
+    let scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .propagate_natural_height(true)
+        .max_content_height(560)
+        .child(&list)
+        .build();
+    card.append(&scroll);
+    let close = gtk::Button::with_label("Close");
+    close.set_halign(gtk::Align::End);
+    let d = dialog.clone();
+    close.connect_clicked(move |_| d.close());
+    card.append(&close);
+    dialog.present();
+}
+
+fn install_keys(window: &gtk::ApplicationWindow, search: &gtk::SearchEntry) {
+    // Capture phase: these work wherever focus is.
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let s2 = search.clone();
+    let w2 = window.clone();
+    keys.connect_key_pressed(move |_, key, _, mods| {
+        let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
+        let shift = mods.contains(gdk::ModifierType::SHIFT_MASK);
+        let alt = mods.contains(gdk::ModifierType::ALT_MASK);
+        let typing = gtk::prelude::GtkWindowExt::focus(&w2)
+            .is_some_and(|f| f.is::<gtk::Text>() || f.is::<gtk::TextView>() || f.ancestor(gtk::Entry::static_type()).is_some());
+        let done = glib::Propagation::Stop;
+        if settings_dialog::is_open() {
+            return match key {
+                gdk::Key::Escape => {
+                    settings_dialog::escape();
+                    done
+                }
+                gdk::Key::f if ctrl => {
+                    settings_dialog::focus_search();
+                    done
+                }
+                gdk::Key::q | gdk::Key::w if ctrl => {
+                    w2.close();
+                    done
+                }
+                _ => glib::Propagation::Proceed,
+            };
+        }
+        match key {
+            gdk::Key::f if ctrl => {
+                open_search();
+                done
+            }
+            gdk::Key::F1 => {
+                show_shortcuts();
+                done
+            }
+            gdk::Key::question if !ctrl && !typing => {
+                show_shortcuts();
+                done
+            }
+            gdk::Key::n if ctrl => {
+                sections::chat::new_chat(None);
+                done
+            }
+            gdk::Key::b if ctrl => {
+                toggle_sidebar();
+                done
+            }
+            gdk::Key::q | gdk::Key::w if ctrl => {
+                w2.close();
+                done
+            }
+            gdk::Key::comma if ctrl => {
+                settings_dialog::open();
+                done
+            }
+            gdk::Key::space if ctrl && current() == "chat" => {
+                sections::chat::toggle_dictation();
+                done
+            }
+            gdk::Key::S if ctrl && shift => {
+                sections::chat::screenshot();
+                done
+            }
+            gdk::Key::Left if alt => {
+                back();
+                done
+            }
+            _ if ctrl && !alt && !shift && key.to_unicode().and_then(|c| c.to_digit(10)).is_some_and(|d| d >= 1) => {
+                let n = key.to_unicode().and_then(|c| c.to_digit(10)).unwrap_or(1) as usize;
+                let id = ui().and_then(|u| u.borrow().sections.get(n - 1).map(|s| s.id));
+                if let Some(id) = id {
+                    navigate(id);
+                }
+                done
+            }
+            gdk::Key::Escape if s2.is_visible() && (s2.has_focus() || s2.focus_child().is_some() || !s2.text().is_empty()) => {
+                s2.set_text("");
+                s2.set_visible(false);
+                done
+            }
+            _ => glib::Propagation::Proceed,
+        }
+    });
+    window.add_controller(keys);
+
+    // The mouse's back button.
+    let mouse_back = gtk::GestureClick::new();
+    mouse_back.set_button(8);
+    mouse_back.set_propagation_phase(gtk::PropagationPhase::Capture);
+    mouse_back.connect_pressed(|g, _, _, _| {
+        g.set_state(gtk::EventSequenceState::Claimed);
+        back();
+    });
+    window.add_controller(mouse_back);
 }
 
 pub fn switch_host(i: usize) {
@@ -394,67 +596,37 @@ pub fn switch_host(i: usize) {
     models::refresh();
 }
 
-/// The parts of the sidebar that change when it collapses to icons.
-struct Sidebar {
-    nav: gtk::Box,
-    /// The heading row: the new-chat and collapse buttons stack in the icon-only sidebar.
-    head: gtk::Box,
-    spacer: gtk::Box,
-    new_chat: gtk::Button,
-    collapse: gtk::Button,
-    /// Hidden in the icon-only sidebar.
-    hide: Vec<gtk::Widget>,
-}
-
-thread_local! {
-    static SIDEBAR: RefCell<Option<Sidebar>> = const { RefCell::new(None) };
-}
-
-/// The sidebar shows only icons: hide the labels, centre the icons and the buttons.
-fn apply_compact(compact: bool) {
-    SIDEBAR.with(|s| {
-        let s = s.borrow();
-        let Some(s) = s.as_ref() else { return };
-        if compact {
-            s.nav.add_css_class("compact");
-        } else {
-            s.nav.remove_css_class("compact");
-        }
-        for w in &s.hide {
+/// The sidebar shows only icons: hide everything marked `compact-hide` and
+/// centre the icons.
+fn apply_compact(nav: &gtk::Box, compact: bool) {
+    if compact {
+        nav.add_css_class("compact");
+    } else {
+        nav.remove_css_class("compact");
+    }
+    fn walk(w: &gtk::Widget, compact: bool) {
+        if w.has_css_class("compact-hide") {
             w.set_visible(!compact);
         }
-        s.spacer.set_visible(compact);
-        s.head.set_orientation(if compact { gtk::Orientation::Vertical } else { gtk::Orientation::Horizontal });
-        s.head.set_spacing(if compact { 4 } else { 6 });
-        // Icon-only: the collapse button leads, so it stays put when the sidebar expands.
-        if compact {
-            s.head.reorder_child_after(&s.collapse, None::<&gtk::Widget>);
-        } else {
-            s.head.reorder_child_after(&s.collapse, Some(&s.new_chat));
+        if w.has_css_class("nav-item")
+            && let Some(content) = w.downcast_ref::<gtk::Button>().and_then(|b| b.child())
+        {
+            content.set_halign(if compact { gtk::Align::Center } else { gtk::Align::Fill });
         }
-        centre_icons(s.nav.upcast_ref(), compact);
-    });
-}
-
-fn centre_icons(w: &gtk::Widget, compact: bool) {
-    if w.has_css_class("nav-item")
-        && let Some(content) = w.downcast_ref::<gtk::Button>().and_then(|b| b.child())
-    {
-        content.set_halign(if compact { gtk::Align::Center } else { gtk::Align::Fill });
+        let mut child = w.first_child();
+        while let Some(c) = child {
+            walk(&c, compact);
+            child = c.next_sibling();
+        }
     }
-    if w.has_css_class("nav-collapse") || w.has_css_class("new-chat") {
-        w.set_halign(if compact { gtk::Align::Center } else { gtk::Align::End });
-    }
-    let mut child = w.first_child();
-    while let Some(c) = child {
-        centre_icons(&c, compact);
-        child = c.next_sibling();
-    }
+    walk(nav.upcast_ref(), compact);
 }
 
 pub fn toggle_sidebar() {
     prefs::update(|p| p.sidebar_collapsed = !p.sidebar_collapsed);
-    apply_compact(NARROW.with(|n| n.get()) || prefs::get().sidebar_collapsed);
+    let Some(ui) = ui() else { return };
+    let nav = ui.borrow().nav.clone();
+    apply_compact(&nav, NARROW.with(|n| n.get()) || prefs::get().sidebar_collapsed);
 }
 
 fn set_narrow(narrow: bool) {
@@ -470,7 +642,8 @@ fn set_narrow(narrow: bool) {
     });
 }
 
-fn mark_page(page: &gtk::Widget, narrow: bool) {
+/// Mark a page (or a scrolled page's body) `narrow` for the tighter padding.
+pub fn mark_page(page: &gtk::Widget, narrow: bool) {
     let body = page.downcast_ref::<gtk::ScrolledWindow>().and_then(|s| s.child()).and_then(|v| v.first_child());
     let target = body.unwrap_or_else(|| page.clone());
     if narrow {
@@ -495,7 +668,24 @@ fn ensure_built(id: &'static str) {
 }
 
 pub fn navigate(id: &str) {
+    go(id, true);
+}
+
+/// Back to the page before this one.
+pub fn back() {
+    let prev = ui().and_then(|u| u.borrow_mut().history.pop());
+    if let Some(id) = prev {
+        go(id, false);
+    }
+}
+
+fn go(id: &str, record: bool) {
     let Some(ui) = ui() else { return };
+    // Settings is a card over the window, not a page.
+    if id == "settings" {
+        settings_dialog::open();
+        return;
+    }
     let resolved = {
         let u = ui.borrow();
         u.sections.iter().find(|s| s.id == id).or_else(|| u.sections.first()).map(|s| s.id)
@@ -503,6 +693,13 @@ pub fn navigate(id: &str) {
     let Some(id) = resolved else { return };
     ensure_built(id);
     let mut u = ui.borrow_mut();
+    if record && u.current != id && !u.current.is_empty() {
+        let prev = u.current;
+        u.history.push(prev);
+        if u.history.len() > 50 {
+            u.history.remove(0);
+        }
+    }
     if let Some(prev) = u.nav_items.get(u.current) {
         prev.remove_css_class("active");
     }
@@ -512,53 +709,94 @@ pub fn navigate(id: &str) {
     u.stack.set_visible_child_name(id);
     u.current = id;
     drop(u);
+    refresh_crumb();
+    refresh_note();
     prefs::update(|p| p.last_section = id.to_string());
 }
 
-fn toast_box(message: &str) -> gtk::Box {
+/// The top bar's page name: the open chat's title on the chat page.
+pub fn refresh_crumb() {
+    let Some(ui) = ui() else { return };
+    let u = ui.borrow();
+    let title = if u.current == "chat" {
+        sections::chat::title()
+    } else {
+        u.sections.iter().find(|s| s.id == u.current).map(|s| s.title.to_string()).unwrap_or_default()
+    };
+    u.crumb.set_text(&title);
+    u.crumb.set_tooltip_text(Some(&title));
+}
+
+/// The status bar's middle: the chat's live readout on the chat page, the
+/// page's description elsewhere.
+pub fn refresh_note() {
+    let Some(ui) = ui() else { return };
+    let u = ui.borrow();
+    let text = if u.current == "chat" {
+        sections::chat::status_text()
+    } else {
+        u.sections.iter().find(|s| s.id == u.current).map(|s| s.description.to_string()).unwrap_or_default()
+    };
+    u.status_note.set_text(&text);
+}
+
+thread_local! {
+    /// The toast showing now; a new one replaces it.
+    static TOAST: RefCell<Option<gtk::Box>> = const { RefCell::new(None) };
+}
+
+type ToastAction<'a> = Option<(&'a str, Box<dyn Fn()>)>;
+
+/// Show a short message at the bottom of the window.
+pub fn toast(message: &str) {
+    show_toast(message, None);
+}
+
+/// A toast with a button (Undo, Open, …). It stays a little longer.
+pub fn toast_action(message: &str, action: &str, f: impl Fn() + 'static) {
+    show_toast(message, Some((action, Box::new(f))));
+}
+
+fn show_toast(message: &str, action: ToastAction<'_>) {
+    let Some(ui) = ui() else {
+        eprintln!("chat: {message}");
+        return;
+    };
+    let overlay = ui.borrow().overlay.clone();
+    if let Some(old) = TOAST.with(|t| t.borrow_mut().take())
+        && old.parent().is_some()
+    {
+        overlay.remove_overlay(&old);
+    }
     let label = gtk::Label::new(Some(message));
     label.set_wrap(true);
     label.set_max_width_chars(70);
     let bx = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     bx.add_css_class("toast");
     bx.append(&label);
+    let has_action = action.is_some();
+    if let Some((text, f)) = action {
+        let b = gtk::Button::with_label(text);
+        b.add_css_class("flat");
+        b.add_css_class("toast-action");
+        b.set_valign(gtk::Align::Center);
+        let (o, w) = (overlay.clone(), bx.downgrade());
+        b.connect_clicked(move |_| {
+            f();
+            if let Some(w) = w.upgrade()
+                && w.parent().is_some()
+            {
+                o.remove_overlay(&w);
+            }
+        });
+        bx.append(&b);
+    }
     bx.set_halign(gtk::Align::Center);
     bx.set_valign(gtk::Align::End);
-    bx
-}
-
-/// Show a short message at the bottom of the window.
-pub fn toast(message: &str) {
-    let Some(ui) = ui() else {
-        eprintln!("chat: {message}");
-        return;
-    };
-    let overlay = ui.borrow().overlay.clone();
-    let bx = toast_box(message);
     overlay.add_overlay(&bx);
-    glib::timeout_add_local_once(std::time::Duration::from_millis(3500), move || {
-        overlay.remove_overlay(&bx);
-    });
-}
-
-/// A toast with a button (Undo, Open, …). It stays a little longer.
-pub fn toast_action(message: &str, action: &str, f: impl Fn() + 'static) {
-    let Some(ui) = ui() else { return };
-    let overlay = ui.borrow().overlay.clone();
-    let bx = toast_box(message);
-    let b = gtk::Button::with_label(action);
-    b.add_css_class("flat");
-    b.add_css_class("accent-text");
-    let (o2, bx2) = (overlay.clone(), bx.clone());
-    b.connect_clicked(move |_| {
-        f();
-        if bx2.parent().is_some() {
-            o2.remove_overlay(&bx2);
-        }
-    });
-    bx.append(&b);
-    overlay.add_overlay(&bx);
-    glib::timeout_add_local_once(std::time::Duration::from_millis(6000), move || {
+    TOAST.with(|t| *t.borrow_mut() = Some(bx.clone()));
+    let ms = if has_action { 6000 } else { 3500 };
+    glib::timeout_add_local_once(std::time::Duration::from_millis(ms), move || {
         if bx.parent().is_some() {
             overlay.remove_overlay(&bx);
         }

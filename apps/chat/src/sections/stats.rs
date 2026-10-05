@@ -8,7 +8,7 @@ use crate::theme::{self, Rgb};
 use crate::{hub, models, store, util, widgets};
 
 pub fn build() -> gtk::Widget {
-    let page = widgets::page("Stats", "Your chats in numbers. Everything here is counted from this computer's history.", &[]);
+    let page = widgets::page("stats");
     let body = widgets::vbox(0);
     page.body.append(&body);
     let fill = {
