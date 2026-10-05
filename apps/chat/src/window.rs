@@ -283,12 +283,26 @@ fn build(app: &gtk::Application) {
         glib::Propagation::Proceed
     });
 
-    // Narrow windows (a tiled half-screen) get an icon-only sidebar.
+    // Narrow windows (a tiled half-screen) get an icon-only sidebar. Tiling
+    // resizes the window without touching its default size, so an invisible
+    // layer over the window reports every resize as it happens, and the
+    // layout follows on the next frame instead of after a polling delay.
+    let probe = gtk::DrawingArea::new();
+    probe.set_can_target(false);
+    probe.set_can_focus(false);
+    overlay.add_overlay(&probe);
+    overlay.set_measure_overlay(&probe, false);
+    let w2 = window.clone();
+    probe.connect_resize(move |_, _, _| {
+        // Changing the layout during allocation is ignored; do it right after.
+        let w = w2.clone();
+        glib::idle_add_local_once(move || relayout(&w));
+    });
     window.connect_default_width_notify(relayout);
     window.connect_realize(relayout);
-    // Tiled windows are resized by the compositor; watch the real size too.
+    // A slow fallback, in case a resize slips by.
     let w2 = window.clone();
-    glib::timeout_add_local(std::time::Duration::from_millis(400), move || {
+    glib::timeout_add_local(std::time::Duration::from_millis(1500), move || {
         relayout(&w2);
         glib::ControlFlow::Continue
     });
