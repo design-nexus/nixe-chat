@@ -1642,10 +1642,6 @@ window.chat-window menubutton.msg-stats > button:hover {
   font-size: 0.9em;
 }
 
-levelbar.ctx-meter {
-  margin: 0 6px;
-}
-
 .msg-stats {
   font-size: 0.78em;
   color: alpha(@theme_dim_text, 0.85);
@@ -2057,16 +2053,21 @@ window.chat-window button.market-card:hover {
 }
 
 /* Model load bar under the picker */
+/* Along the picker's bottom edge, inside its border. */
+progressbar.model-load {
+  margin: 0 7px 1px;
+}
+
 progressbar.model-load > trough {
   min-width: 0;
-  min-height: 3px;
+  min-height: 2px;
   border-radius: 999px;
-  background: alpha(@theme_muted, 0.6);
+  background: transparent;
   border: none;
 }
 
 progressbar.model-load > trough > progress {
-  min-height: 3px;
+  min-height: 2px;
   border-radius: 999px;
   background: alpha(@theme_accent, 0.85);
   border: none;
@@ -2074,6 +2075,62 @@ progressbar.model-load > trough > progress {
 
 progressbar.model-load.loaded > trough > progress {
   background: @theme_accent;
+}
+
+/* Chat toolbar: equal 30 px icon buttons, like the top bar's. */
+window.chat-window button.tool-button,
+window.chat-window menubutton.tool-button > button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.tool-button:hover,
+window.chat-window menubutton.tool-button > button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window button.tool-button:checked,
+window.chat-window menubutton.tool-button > button:checked {
+  background: @nav_active;
+  color: @theme_accent;
+}
+
+.chat-header .caps {
+  margin-right: 6px;
+}
+
+/* Context use in the message bar: as tall and quiet as the icons beside it. */
+.ctx-readout {
+  min-height: 32px;
+  padding: 0 8px;
+  margin-left: 4px;
+  border-radius: 6px;
+  color: @theme_dim_text;
+  font-size: 0.82em;
+  font-feature-settings: "tnum";
+}
+
+.ctx-readout:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+.ctx-readout.hot {
+  color: @theme_danger;
+}
+
+levelbar.ctx-bar > trough {
+  min-height: 4px;
+}
+
+levelbar.ctx-bar > trough > block {
+  min-height: 4px;
 }
 
 /* Message bar toggles: icon-only, quiet until on */

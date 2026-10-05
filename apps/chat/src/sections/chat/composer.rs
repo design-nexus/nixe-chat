@@ -35,6 +35,10 @@ pub struct Composer {
     think: gtk::ToggleButton,
     tools_btn: gtk::MenuButton,
     kb_btn: gtk::MenuButton,
+    /// How full the context is, after the tool icons.
+    ctx: gtk::Box,
+    ctx_bar: gtk::LevelBar,
+    ctx_label: gtk::Label,
     note: gtk::Label,
     attachments: RefCell<Vec<Attachment>>,
     streaming: Cell<bool>,
@@ -136,6 +140,19 @@ impl Composer {
         ] {
             chips.append(w);
         }
+        // Context use: a short bar and "3.1k / 8k", quiet like the icons beside it.
+        let ctx = widgets::hbox(6);
+        ctx.add_css_class("ctx-readout");
+        ctx.set_valign(gtk::Align::Center);
+        ctx.set_visible(false);
+        let ctx_bar = widgets::usage_bar();
+        ctx_bar.add_css_class("ctx-bar");
+        ctx_bar.set_hexpand(false);
+        ctx_bar.set_size_request(28, -1);
+        let ctx_label = widgets::label("", "ctx-label");
+        ctx.append(&ctx_bar);
+        ctx.append(&ctx_label);
+        chips.append(&ctx);
         // Chips wrap away on narrow windows rather than widening them.
         let chip_scroll = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::External)
@@ -190,6 +207,9 @@ impl Composer {
             think,
             tools_btn,
             kb_btn,
+            ctx,
+            ctx_bar,
+            ctx_label,
             note,
             attachments: RefCell::new(Vec::new()),
             streaming: Cell::new(false),
@@ -389,6 +409,29 @@ impl Composer {
         buf.set_text(&text);
         buf.place_cursor(&buf.end_iter());
         self.focus();
+    }
+
+    /// Show how many tokens of the context the chat uses; `None` hides it.
+    pub fn set_context(&self, used: Option<(u64, u64)>) {
+        let Some((used, limit)) = used else {
+            self.ctx.set_visible(false);
+            return;
+        };
+        let f = (used as f64 / limit as f64).min(1.0);
+        self.ctx_bar.set_value(f);
+        self.ctx_label.set_text(&format!("{} / {}", super::short_count(used), super::short_count(limit)));
+        if f >= 0.9 {
+            self.ctx.add_css_class("hot");
+        } else {
+            self.ctx.remove_css_class("hot");
+        }
+        self.ctx.set_tooltip_text(Some(&format!(
+            "Context: {} of {} tokens used ({:.0}%)",
+            util::count(used),
+            util::count(limit),
+            f * 100.0
+        )));
+        self.ctx.set_visible(true);
     }
 
     pub fn clear_draft_for_switch(&self) {

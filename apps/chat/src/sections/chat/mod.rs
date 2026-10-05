@@ -23,8 +23,6 @@ pub(crate) struct Page {
     load_pulse: RefCell<Option<glib::SourceId>>,
     model_list: RefCell<Vec<String>>,
     caps: gtk::Box,
-    /// How full the context was after the last reply.
-    ctx_meter: gtk::LevelBar,
     compare_btn: gtk::MenuButton,
     banners: gtk::Box,
     scroller: gtk::ScrolledWindow,
@@ -87,8 +85,8 @@ pub fn title() -> String {
     page().map(|p| p.st.borrow().chat().title.clone()).filter(|t| !t.is_empty()).unwrap_or_else(|| "New chat".into())
 }
 
-/// The status bar's readout on the chat page: the model, the last reply's
-/// speed, and how full the context is.
+/// The status bar's readout on the chat page: the model and the last reply's
+/// speed. How full the context is shows in the message bar.
 pub fn status_text() -> String {
     let Some(p) = page() else { return String::new() };
     let st = p.st.borrow();
@@ -97,14 +95,11 @@ pub fn status_text() -> String {
     if let Some(m) = path.iter().rev().find(|m| m.role == "assistant" && m.tps > 0.0) {
         parts.push(format!("{:.0} tok/s", m.tps));
     }
-    if let Some(used) = send::context_used(&path) {
-        parts.push(format!("ctx {} / {}", short_count(used), short_count(send::context_limit(st.chat()) as u64)));
-    }
     parts.join(" · ")
 }
 
 /// 3.1k, 8k, 128k.
-fn short_count(n: u64) -> String {
+pub(crate) fn short_count(n: u64) -> String {
     if n < 1000 {
         n.to_string()
     } else if n.is_multiple_of(1024) {
@@ -133,12 +128,19 @@ pub fn build() -> gtk::Widget {
 
     // ----- Toolbar -----
     // The model picker on the left, the chat's actions on the right.
-    let header = widgets::hbox(6);
+    // The model picker centred; the chat list button (narrow windows) at the
+    // start and the chat's actions at the end, as one row of equal buttons.
+    let header = gtk::CenterBox::new();
     header.add_css_class("toolbar");
     header.add_css_class("chat-header");
+    let start = widgets::hbox(2);
+    let end = widgets::hbox(2);
+    end.set_halign(gtk::Align::End);
+    header.set_start_widget(Some(&start));
+    header.set_end_widget(Some(&end));
     let history_btn = gtk::MenuButton::new();
     history_btn.set_icon_name("view-list-symbolic");
-    history_btn.add_css_class("flat");
+    history_btn.add_css_class("tool-button");
     history_btn.set_tooltip_text(Some("Chats"));
     history_btn.set_visible(false);
     let pop = gtk::Popover::new();
@@ -162,54 +164,47 @@ pub fn build() -> gtk::Widget {
     hist.append(&hlist);
     pop.set_child(Some(&hist));
     history_btn.set_popover(Some(&pop));
-    header.append(&history_btn);
+    start.append(&history_btn);
 
-    let picker = widgets::vbox(3);
+    // The load bar runs along the picker's bottom edge, so the picker is as
+    // tall as the buttons beside it.
+    let picker = gtk::Overlay::new();
     picker.set_valign(gtk::Align::Center);
     let model_dd = gtk::DropDown::from_strings(&[]);
     widgets::ellipsize(&model_dd);
     model_dd.add_css_class("model-picker");
     model_dd.set_enable_search(true);
     model_dd.set_tooltip_text(Some("Model"));
-    picker.append(&model_dd);
+    picker.set_child(Some(&model_dd));
     // Shows whether the model is in memory: pulsing while it loads, full once loaded.
     let load_bar = gtk::ProgressBar::new();
     load_bar.add_css_class("model-load");
     load_bar.set_pulse_step(0.12);
-    picker.append(&load_bar);
-    header.append(&picker);
-
-    let spacer = widgets::hbox(0);
-    spacer.set_hexpand(true);
-    header.append(&spacer);
+    load_bar.set_valign(gtk::Align::End);
+    load_bar.set_can_target(false);
+    picker.add_overlay(&load_bar);
+    header.set_center_widget(Some(&picker));
 
     let caps = widgets::hbox(4);
     caps.add_css_class("caps");
     caps.set_valign(gtk::Align::Center);
-    header.append(&caps);
-
-    let ctx_meter = widgets::usage_bar();
-    ctx_meter.add_css_class("ctx-meter");
-    ctx_meter.set_hexpand(false);
-    ctx_meter.set_size_request(56, -1);
-    ctx_meter.set_visible(false);
-    header.append(&ctx_meter);
+    end.append(&caps);
 
     let compare_btn = gtk::MenuButton::new();
     compare_btn.set_icon_name("list-add-symbolic");
-    compare_btn.add_css_class("flat");
+    compare_btn.add_css_class("tool-button");
     compare_btn.set_tooltip_text(Some("Compare with other models"));
-    header.append(&compare_btn);
+    end.append(&compare_btn);
 
     let settings_btn = gtk::ToggleButton::new();
     settings_btn.set_icon_name("preferences-other-symbolic");
-    settings_btn.add_css_class("flat");
+    settings_btn.add_css_class("tool-button");
     settings_btn.set_tooltip_text(Some("This chat's prompt and parameters"));
-    header.append(&settings_btn);
+    end.append(&settings_btn);
 
     let more = gtk::MenuButton::new();
     more.set_icon_name("view-more-symbolic");
-    more.add_css_class("flat");
+    more.add_css_class("tool-button");
     more.set_tooltip_text(Some("More"));
     more.set_create_popup_func(|m| {
         let Some(p) = page() else { return };
@@ -223,7 +218,7 @@ pub fn build() -> gtk::Widget {
             }
         }
     });
-    header.append(&more);
+    end.append(&more);
     root.append(&header);
 
     let banners = widgets::vbox(0);
@@ -300,7 +295,6 @@ pub fn build() -> gtk::Widget {
         load_pulse: RefCell::new(None),
         model_list: RefCell::new(Vec::new()),
         caps,
-        ctx_meter,
         compare_btn: compare_btn.clone(),
         banners,
         scroller: scroller.clone(),
@@ -605,20 +599,7 @@ pub(crate) fn refresh_context(p: &Page) {
         let path = store::path_to(&st.all, st.chat().leaf);
         (send::context_limit(st.chat()), send::context_used(&path))
     };
-    match used {
-        Some(used) if limit > 0 => {
-            let f = (used as f64 / limit as f64).min(1.0);
-            p.ctx_meter.set_value(f);
-            p.ctx_meter.set_tooltip_text(Some(&format!(
-                "Context: {} of {} tokens used ({:.0}%)",
-                crate::util::count(used),
-                crate::util::count(limit as u64),
-                f * 100.0
-            )));
-            p.ctx_meter.set_visible(true);
-        }
-        _ => p.ctx_meter.set_visible(false),
-    }
+    p.composer.set_context(used.filter(|_| limit > 0).map(|u| (u, limit as u64)));
     window::refresh_note();
 }
 
