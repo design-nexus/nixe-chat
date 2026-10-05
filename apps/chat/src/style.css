@@ -255,7 +255,7 @@ entry.settings-search image {
 
 /* A dialog's bold title. */
 .dialog-card .dialog-title {
-  font-size: 1.2em;
+  font-size: 1.3em;
   font-weight: 700;
   color: @theme_text;
 }
