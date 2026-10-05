@@ -458,9 +458,21 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
         move || {
             let p = prefs::get();
             let names: Vec<String> = p.hosts.iter().map(|h| h.name.clone()).collect();
-            let refs: Vec<&str> = names.iter().map(String::as_str).collect();
-            hosts.set_model(Some(&gtk::StringList::new(&refs)));
-            hosts.set_selected(p.active_host.min(names.len().saturating_sub(1)) as u32);
+            // Replacing the list while the dropdown is handling a click on it
+            // crashes GTK, so the list is only touched when the names changed.
+            let current: Vec<String> = hosts
+                .model()
+                .and_downcast::<gtk::StringList>()
+                .map(|l| (0..l.n_items()).filter_map(|i| l.string(i).map(String::from)).collect())
+                .unwrap_or_default();
+            if current != names {
+                let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+                hosts.set_model(Some(&gtk::StringList::new(&refs)));
+            }
+            let selected = p.active_host.min(names.len().saturating_sub(1)) as u32;
+            if hosts.selected() != selected {
+                hosts.set_selected(selected);
+            }
             hosts.set_visible(names.len() > 1);
         }
     };
@@ -468,7 +480,8 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
     hosts.connect_selected_notify(|d| {
         let i = d.selected() as usize;
         if i != prefs::get().active_host && i < prefs::get().hosts.len() {
-            switch_host(i);
+            // After GTK has finished with the click.
+            glib::idle_add_local_once(move || switch_host(i));
         }
     });
     hub::on(&hub::HOST, &hosts, fill_hosts);
