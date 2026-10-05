@@ -34,6 +34,11 @@ thread_local! {
     static UI: RefCell<Option<Rc<RefCell<Ui>>>> = const { RefCell::new(None) };
     static NARROW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static NARROW_HOOKS: RefCell<Vec<NarrowHook>> = const { RefCell::new(Vec::new()) };
+    /// The window is wide enough for extras (1200 px and up).
+    static ROOMY: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    static ROOMY_HOOKS: RefCell<Vec<NarrowHook>> = const { RefCell::new(Vec::new()) };
+    /// A page has a side panel open and needs the sidebar's room.
+    static NEEDS_ROOM: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 fn ui() -> Option<Rc<RefCell<Ui>>> {
@@ -57,6 +62,22 @@ pub fn narrow() -> bool {
 }
 
 /// Run `f` now and whenever the window crosses the compact width.
+/// Run `f` now and whenever the window crosses 1200 px: extras that make the
+/// wide layout wider (capability tags) show only above it.
+pub fn on_roomy(f: impl Fn(bool) + 'static) {
+    f(ROOMY.with(|r| r.get()));
+    ROOMY_HOOKS.with(|h| h.borrow_mut().push(Box::new(f)));
+}
+
+/// A side panel opened or closed: under 1200 px, an open panel takes the
+/// sidebar's labels, so the window still fits a half-screen tile.
+pub fn set_needs_room(on: bool) {
+    NEEDS_ROOM.with(|n| n.set(on));
+    if let Some(w) = window() {
+        relayout(&w);
+    }
+}
+
 pub fn on_narrow(f: impl Fn(bool) + 'static) {
     f(narrow());
     NARROW_HOOKS.with(|h| h.borrow_mut().push(Box::new(f)));
@@ -263,28 +284,12 @@ fn build(app: &gtk::Application) {
     });
 
     // Narrow windows (a tiled half-screen) get an icon-only sidebar.
-    let apply_width = {
-        let nav = nav.clone();
-        move |w: &gtk::ApplicationWindow| {
-            let width = if w.width() > 0 { w.width() } else { w.default_width() };
-            let narrow = width > 0 && width < 980;
-            settings_dialog::fit(w);
-            if narrow == NARROW.with(|n| n.get()) && nav.has_css_class("sized") {
-                return;
-            }
-            nav.add_css_class("sized");
-            set_narrow(narrow);
-            apply_compact(&nav, narrow || prefs::get().sidebar_collapsed);
-        }
-    };
-    let aw = apply_width.clone();
-    window.connect_default_width_notify(move |w| aw(w));
-    let aw = apply_width.clone();
-    window.connect_realize(move |w| aw(w));
+    window.connect_default_width_notify(relayout);
+    window.connect_realize(relayout);
     // Tiled windows are resized by the compositor; watch the real size too.
     let w2 = window.clone();
     glib::timeout_add_local(std::time::Duration::from_millis(400), move || {
-        apply_width(&w2);
+        relayout(&w2);
         glib::ControlFlow::Continue
     });
 
@@ -430,6 +435,7 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
     bar.append(&readout);
 
     let hosts = gtk::DropDown::from_strings(&[]);
+    widgets::ellipsize(&hosts);
     hosts.add_css_class("host-switcher");
     hosts.set_tooltip_text(Some("Ollama server"));
     bar.append(&hosts);
@@ -669,11 +675,42 @@ fn apply_compact(nav: &gtk::Box, compact: bool) {
     walk(nav.upcast_ref(), compact);
 }
 
+/// Fit the layout to the window's width. The wide layout must stay narrower
+/// than a half-screen tile: if it didn't, GTK would keep the window at its
+/// minimum, its width would never drop under the limit, and it would stay cut off.
+fn relayout(w: &gtk::ApplicationWindow) {
+    let Some(nav) = ui().map(|u| u.borrow().nav.clone()) else { return };
+    let width = if w.width() > 0 { w.width() } else { w.default_width() };
+    if width <= 0 {
+        return;
+    }
+    // CHAT_DEBUG_WIDE keeps the wide layout, for measuring it in a tile.
+    let narrow = width < 980 && std::env::var_os("CHAT_DEBUG_WIDE").is_none();
+    let roomy = width >= 1200;
+    settings_dialog::fit(w);
+    if roomy != ROOMY.with(|r| r.replace(roomy)) {
+        ROOMY_HOOKS.with(|h| {
+            for f in h.borrow().iter() {
+                f(roomy);
+            }
+        });
+    }
+    if narrow != NARROW.with(|n| n.get()) || !nav.has_css_class("sized") {
+        nav.add_css_class("sized");
+        set_narrow(narrow);
+    }
+    let compact = narrow || prefs::get().sidebar_collapsed || (NEEDS_ROOM.with(|n| n.get()) && !roomy);
+    if compact != nav.has_css_class("compact") || !nav.has_css_class("laid-out") {
+        nav.add_css_class("laid-out");
+        apply_compact(&nav, compact);
+    }
+}
+
 pub fn toggle_sidebar() {
     prefs::update(|p| p.sidebar_collapsed = !p.sidebar_collapsed);
-    let Some(ui) = ui() else { return };
-    let nav = ui.borrow().nav.clone();
-    apply_compact(&nav, NARROW.with(|n| n.get()) || prefs::get().sidebar_collapsed);
+    if let Some(w) = window() {
+        relayout(&w);
+    }
 }
 
 fn set_narrow(narrow: bool) {
@@ -924,6 +961,7 @@ pub fn snapshot_window(app: &gtk::Application, window: &gtk::Window, out: std::p
         if let Some(limit) = std::env::var("CHAT_DEBUG_WIDTH").ok().and_then(|v| v.parse::<i32>().ok())
             && let Some(child) = window.child()
         {
+            println!("WINDOW MIN {}", child.measure(gtk::Orientation::Horizontal, -1).0);
             report_wide(&child, limit);
         }
         if let Some(child) = window.child() {

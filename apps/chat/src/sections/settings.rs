@@ -339,6 +339,7 @@ fn chat_defaults(page: &Page) {
         None,
     );
     let dd = gtk::DropDown::from_strings(&[]);
+    widgets::ellipsize(&dd);
     dd.set_valign(gtk::Align::Center);
     dd_row.append(&dd);
     g.add(&dd_row);

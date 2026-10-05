@@ -39,7 +39,12 @@
   `chat --quick` also honors `CHAT_SNAPSHOT` and `CHAT_SNAPSHOT_SEND`.
 - Layout checks: `CHAT_DEBUG_WIDTH=736` (with `CHAT_SNAPSHOT`) prints the innermost widgets
   whose minimum width is over that, i.e. what makes a page wider than an 800 px window.
-  Long one-line text (model names, titles, paths) goes through `widgets::short_label`.
+  Long one-line text (model names, titles, paths) goes through `widgets::short_label`;
+  drop-downs ellipsize via `widgets::ellipsize`. The wide layout (sidebar expanded) must also
+  fit a half-screen tile (~780 px): if it's wider, GTK keeps the window at its minimum, the
+  width never drops under 980 and the window stays cut off. `CHAT_DEBUG_WIDE=1` forces the
+  wide layout so `CHAT_DEBUG_WIDTH` can measure it; extras that widen it go behind
+  `window::on_roomy`, and side panels call `window::set_needs_room`.
   `CHAT_AUTOSEND="text"` sends a message in a normal (visible) window, for checking with grim.
 - Never move a scroll adjustment inside its `changed` handler: that runs during layout and
   GTK drops the move, leaving content drawn at the old offset. Defer it (idle or tick).

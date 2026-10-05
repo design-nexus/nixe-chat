@@ -167,6 +167,7 @@ pub fn build() -> gtk::Widget {
     let picker = widgets::vbox(3);
     picker.set_valign(gtk::Align::Center);
     let model_dd = gtk::DropDown::from_strings(&[]);
+    widgets::ellipsize(&model_dd);
     model_dd.add_css_class("model-picker");
     model_dd.set_enable_search(true);
     model_dd.set_tooltip_text(Some("Model"));
@@ -385,6 +386,7 @@ pub fn build() -> gtk::Widget {
             p2.panel_stack.set_visible_child_name("settings");
         }
         p2.panel.set_visible(b.is_active());
+        window::set_needs_room(b.is_active());
     });
 
     model_dd.connect_selected_notify(|dd| {
@@ -432,14 +434,15 @@ pub fn build() -> gtk::Widget {
     window::on_narrow({
         let hb = history_btn.clone();
         let lb = pg.live_box.clone();
-        let caps = pg.caps.clone();
         move |narrow| {
             hb.set_visible(narrow);
-            // The capability tags don't fit beside the picker in a narrow window.
-            caps.set_visible(!narrow);
             lb.set_orientation(if narrow { gtk::Orientation::Vertical } else { gtk::Orientation::Horizontal });
         }
     });
+
+    // The capability tags would make the toolbar too wide for a half-screen tile.
+    let caps = pg.caps.clone();
+    window::on_roomy(move |roomy| caps.set_visible(roomy));
 
     crate::markdown::set_preview_handler(|lang, code| {
         if let Some(p) = page() {

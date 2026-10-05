@@ -247,9 +247,15 @@ fn card(title: &str, desc: &str, tags: &[String]) -> (gtk::Button, gtk::Box) {
         v.append(&d);
     }
     if !tags.is_empty() {
-        let row = widgets::hbox(4);
+        // Wraps onto more lines rather than widening the page.
+        let row = gtk::FlowBox::new();
+        row.set_selection_mode(gtk::SelectionMode::None);
+        row.set_column_spacing(4);
+        row.set_row_spacing(4);
+        row.set_max_children_per_line(8);
+        row.set_can_target(false);
         for t in tags.iter().take(8) {
-            row.append(&widgets::tag(t, ""));
+            row.insert(&widgets::tag(t, ""), -1);
         }
         v.append(&row);
     }

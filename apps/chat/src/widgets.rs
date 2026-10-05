@@ -164,12 +164,46 @@ pub fn switch_row(title: &str, desc: &str, active: bool, on_change: impl Fn(bool
 pub fn dropdown(options: &[(String, String)], current: &str) -> gtk::DropDown {
     let labels: Vec<&str> = options.iter().map(|(_, l)| l.as_str()).collect();
     let dd = gtk::DropDown::from_strings(&labels);
+    ellipsize(&dd);
     if let Some(i) = options.iter().position(|(id, _)| id == current) {
         dd.set_selected(i as u32);
     } else {
         dd.set_selected(gtk::INVALID_LIST_POSITION);
     }
     dd
+}
+
+/// A closed drop-down shortens its text with an ellipsis instead of growing to
+/// its longest option; the open list shows every option in full.
+pub fn ellipsize(dd: &gtk::DropDown) {
+    dd.set_factory(Some(&string_factory(true)));
+    dd.set_list_factory(Some(&string_factory(false)));
+    // Typing to search matches the text.
+    dd.set_expression(Some(gtk::PropertyExpression::new(gtk::StringObject::static_type(), None::<gtk::Expression>, "string")));
+}
+
+/// Labels for a drop-down of strings; `short` ones ellipsize.
+fn string_factory(short: bool) -> gtk::SignalListItemFactory {
+    let f = gtk::SignalListItemFactory::new();
+    f.connect_setup(move |_, item| {
+        let l = gtk::Label::new(None);
+        l.set_xalign(0.0);
+        if short {
+            l.set_ellipsize(pango::EllipsizeMode::End);
+            l.set_width_chars(6);
+            l.set_max_width_chars(30);
+        }
+        if let Some(item) = item.downcast_ref::<gtk::ListItem>() {
+            item.set_child(Some(&l));
+        }
+    });
+    f.connect_bind(|_, item| {
+        let Some(item) = item.downcast_ref::<gtk::ListItem>() else { return };
+        if let (Some(l), Some(s)) = (item.child().and_downcast::<gtk::Label>(), item.item().and_downcast::<gtk::StringObject>()) {
+            l.set_text(&s.string());
+        }
+    });
+    f
 }
 
 pub fn opts(pairs: &[(&str, &str)]) -> Vec<(String, String)> {

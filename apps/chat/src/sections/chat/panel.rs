@@ -253,7 +253,10 @@ pub(super) fn show_artifact(p: &Rc<Page>, lang: &str, code: &str) {
     let close = gtk::Button::from_icon_name("window-close-symbolic");
     close.add_css_class("flat");
     let p2 = p.clone();
-    close.connect_clicked(move |_| p2.panel.set_visible(false));
+    close.connect_clicked(move |_| {
+        p2.panel.set_visible(false);
+        window::set_needs_room(false);
+    });
     head.append(&close);
     b.append(&head);
 
@@ -300,6 +303,7 @@ pub(super) fn show_artifact(p: &Rc<Page>, lang: &str, code: &str) {
 
     p.panel_stack.set_visible_child_name("artifact");
     p.panel.set_visible(true);
+    window::set_needs_room(true);
 }
 
 fn mermaid_page(code: &str) -> String {

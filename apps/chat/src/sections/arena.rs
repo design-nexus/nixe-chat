@@ -69,6 +69,8 @@ pub fn build() -> gtk::Widget {
     let pickers = widgets::hbox(10);
     let pick_a = gtk::DropDown::from_strings(&[]);
     let pick_b = gtk::DropDown::from_strings(&[]);
+    widgets::ellipsize(&pick_a);
+    widgets::ellipsize(&pick_b);
     for (label, dd) in [("Model A", &pick_a), ("Model B", &pick_b)] {
         let v = widgets::vbox(4);
         v.set_hexpand(true);
@@ -96,6 +98,7 @@ pub fn build() -> gtk::Widget {
     g.add(&pickers);
     let note = widgets::label("Leave both on Random to keep it blind. Names are shown after you vote.", "dim");
     note.add_css_class("small-text");
+    note.set_wrap(true);
     g.add(&note);
     let (sw, prompt) = widgets::text_area("", false, 80);
     let prompt_buf = prompt.buffer();
