@@ -390,27 +390,34 @@ pub fn build() -> gtk::Widget {
     });
 
     model_dd.connect_selected_notify(|dd| {
-        let Some(p) = page() else { return };
-        let Some(name) = p.model_list.borrow().get(dd.selected() as usize).cloned() else { return };
-        let changed = {
-            let mut st = p.st.borrow_mut();
-            let c = st.chat_mut();
-            if c.model != name {
-                c.model = name.clone();
-                c.compare.retain(|m| *m != name);
-                true
-            } else {
-                false
+        // Refreshing the picker (its list changes when the chat's model does)
+        // from inside its own click handler crashes GTK, so this waits until
+        // GTK is done. Reading the selection then also means the picker's own
+        // refreshes settle first and aren't mistaken for a pick.
+        let dd = dd.clone();
+        glib::idle_add_local_once(move || {
+            let Some(p) = page() else { return };
+            let Some(name) = p.model_list.borrow().get(dd.selected() as usize).cloned() else { return };
+            let changed = {
+                let mut st = p.st.borrow_mut();
+                let c = st.chat_mut();
+                if c.model != name {
+                    c.model = name.clone();
+                    c.compare.retain(|m| *m != name);
+                    true
+                } else {
+                    false
+                }
+            };
+            if changed {
+                models::pick(&name);
+                save_chat(&p);
+                refresh_header(&p);
+                if p.panel.is_visible() && p.panel_stack.visible_child_name().as_deref() == Some("settings") {
+                    panel::fill(&p);
+                }
             }
-        };
-        if changed {
-            models::pick(&name);
-            save_chat(&p);
-            refresh_header(&p);
-            if p.panel.is_visible() && p.panel_stack.visible_child_name().as_deref() == Some("settings") {
-                panel::fill(&p);
-            }
-        }
+        });
     });
 
     compare_btn.set_create_popup_func(|m| {
