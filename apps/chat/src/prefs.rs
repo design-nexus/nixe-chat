@@ -51,7 +51,6 @@ pub struct Prefs {
     /// The sidebar shows only icons, whatever the window width.
     pub sidebar_collapsed: bool,
     pub glow: bool,
-    pub last_section: String,
     pub last_chat: i64,
 
     // ----- Connection -----
@@ -134,7 +133,6 @@ impl Default for Prefs {
             reduce_motion: false,
             sidebar_collapsed: false,
             glow: true,
-            last_section: "chat".into(),
             last_chat: 0,
             hosts: vec![Host::default()],
             active_host: 0,

@@ -98,10 +98,11 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
     }
     init();
     build(app);
-    let start = section.map(String::from).unwrap_or_else(|| prefs::get().last_section);
-    // Settings opens over the page you were on.
+    // The window always opens on the chat page, unless asked for another.
+    let start = section.unwrap_or("chat").to_string();
+    // Settings opens over the chat page.
     if start == "settings" {
-        navigate(&prefs::get().last_section);
+        navigate("chat");
     }
     navigate(&start);
     if let Some(out) = std::env::var_os("CHAT_SNAPSHOT") {
@@ -757,7 +758,6 @@ fn go(id: &str, record: bool) {
     drop(u);
     refresh_crumb();
     refresh_note();
-    prefs::update(|p| p.last_section = id.to_string());
 }
 
 /// The top bar's page name: the open chat's title on the chat page.
