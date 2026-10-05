@@ -23,8 +23,8 @@ Chat talks to an Ollama server (on this computer by default). It doesn't run mod
     later turns build on your version, or **branch** a new chat from any message.
   - Select text in a reply to **ask about it** or have it explained.
   - Click a reply's speed to see its time to first token, token counts, total time and
-    why it ended. The status bar shows the model, its speed and how full the context is,
-    and the message bar shows how much of the context the chat uses.
+    why it ended. The status bar shows the model and its speed, and the message bar
+    shows how much of the context the chat uses.
   - When a chat outgrows its context, the oldest messages are left out (or the first
     exchange is kept, or the chat stops and says so), per chat or by default.
   - Optional follow-up questions after each reply.
