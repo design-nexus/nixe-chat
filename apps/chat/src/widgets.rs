@@ -1,5 +1,7 @@
 //! Nexus-style building blocks: pages, groups and option rows.
 
+pub use nixe_ui::widgets::*;
+
 use crate::paths;
 use gtk::pango;
 use gtk::prelude::*;
@@ -79,24 +81,6 @@ impl Page {
         self.body.append(&wrapper);
         Group { wrapper, list }
     }
-}
-
-pub fn banner(text: &str, warning: bool) -> gtk::Box {
-    let b = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-    b.add_css_class("banner");
-    if warning {
-        b.add_css_class("warning");
-    }
-    let icon = gtk::Image::from_icon_name(if warning { "dialog-warning-symbolic" } else { "dialog-information-symbolic" });
-    icon.set_valign(gtk::Align::Start);
-    let l = gtk::Label::new(None);
-    l.set_markup(text);
-    l.set_wrap(true);
-    l.set_xalign(0.0);
-    l.set_hexpand(true);
-    b.append(&icon);
-    b.append(&l);
-    b
 }
 
 #[derive(Clone)]
@@ -206,10 +190,6 @@ fn string_factory(short: bool) -> gtk::SignalListItemFactory {
     f
 }
 
-pub fn opts(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
-    pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
-}
-
 pub fn choice_row(
     title: &str,
     desc: &str,
@@ -250,14 +230,6 @@ pub fn bar_button(icon: &str, tooltip: &str) -> gtk::Button {
     b
 }
 
-pub fn hbox(spacing: i32) -> gtk::Box {
-    gtk::Box::new(gtk::Orientation::Horizontal, spacing)
-}
-
-pub fn vbox(spacing: i32) -> gtk::Box {
-    gtk::Box::new(gtk::Orientation::Vertical, spacing)
-}
-
 /// A one-line label for text that can be long (model names, titles, paths):
 /// it shortens with an ellipsis instead of widening the page, and shows the
 /// whole text on hover.
@@ -268,67 +240,7 @@ pub fn short_label(text: &str, class: &str, mode: pango::EllipsizeMode) -> gtk::
     l
 }
 
-pub fn label(text: &str, class: &str) -> gtk::Label {
-    let l = gtk::Label::new(Some(text));
-    if !class.is_empty() {
-        l.add_css_class(class);
-    }
-    l.set_xalign(0.0);
-    l
-}
-
 // ---------- Monitoring pieces ----------
-
-/// A thin usage bar that turns `danger` above 90%.
-pub fn usage_bar() -> gtk::LevelBar {
-    let bar = gtk::LevelBar::for_interval(0.0, 1.0);
-    for name in ["low", "high", "full"] {
-        bar.remove_offset_value(Some(name));
-    }
-    bar.add_offset_value("ok", 0.9);
-    bar.add_offset_value("hot", 1.0);
-    bar.set_hexpand(true);
-    bar.set_valign(gtk::Align::Center);
-    bar
-}
-
-/// A small pill label ("Stopped", "Omarchy", "Failed").
-pub fn tag(text: &str, kind: &str) -> gtk::Label {
-    let l = gtk::Label::new(Some(text));
-    l.add_css_class("tag");
-    if !kind.is_empty() {
-        l.add_css_class(kind);
-    }
-    l.set_valign(gtk::Align::Center);
-    l
-}
-
-/// A button that needs two clicks: the first arms it ("Click again to …"),
-/// the second acts. It disarms itself after a few seconds.
-pub fn two_click(label_text: &str, armed_text: &str, act: impl Fn() + 'static) -> gtk::Button {
-    let b = gtk::Button::with_label(label_text);
-    b.add_css_class("destructive-action");
-    let armed = Rc::new(std::cell::Cell::new(false));
-    let (idle, armed_label) = (label_text.to_string(), armed_text.to_string());
-    b.connect_clicked(move |b| {
-        if armed.get() {
-            armed.set(false);
-            b.set_label(&idle);
-            act();
-            return;
-        }
-        armed.set(true);
-        b.set_label(&armed_label);
-        let (b2, armed2, idle2) = (b.clone(), armed.clone(), idle.clone());
-        gtk::glib::timeout_add_local_once(std::time::Duration::from_secs(4), move || {
-            if armed2.get() {
-                armed2.set(false);
-                b2.set_label(&idle2);
-            }
-        });
-    });
-    b
-}
 
 /// A modal card dialog in the app's style. Returns the window and its content box.
 pub fn dialog(title: &str, width: i32) -> (gtk::Window, gtk::Box) {

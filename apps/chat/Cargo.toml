@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 nixe-core = { path = "../../crates/nixe-core" }
+nixe-ui = { path = "../../crates/nixe-ui" }
 nixe-theme = { path = "../../crates/nixe-theme" }
 anyhow = "1"
 async-channel = "2"
