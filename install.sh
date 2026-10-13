@@ -140,7 +140,7 @@ for a in "${apps[@]}"; do
     fi
   done
   for f in "$d"/data/io.github.design_nexus.nixe.*.desktop; do install -m 644 "$f" "$desk/"; done
-  for f in "$d"/data/io.github.design_nexus.nixe.*.svg; do [[ -f $f ]] && install -m 644 "$f" "$icons/"; done
+  for id in $ids; do install -m 644 "$src/crates/nixe-icons/apps/io.github.design_nexus.nixe.$id.svg" "$icons/"; done
   if [[ -f $d/data/nixe-office.xml ]]; then
     mkdir -p "$share/mime/packages"
     install -m 644 "$d/data/nixe-office.xml" "$share/mime/packages/"

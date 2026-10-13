@@ -147,7 +147,7 @@ fn install_icons() {
         ("chat-store-symbolic.svg", include_str!("../data/icons/chat-store-symbolic.svg")),
         ("chat-stats-symbolic.svg", include_str!("../data/icons/chat-stats-symbolic.svg")),
         ("chat-branch-symbolic.svg", include_str!("../data/icons/chat-branch-symbolic.svg")),
-        ("io.github.design_nexus.nixe.Chat.svg", include_str!("../data/io.github.design_nexus.nixe.Chat.svg")),
+        ("io.github.design_nexus.nixe.Chat.svg", include_str!("../../../crates/nixe-icons/apps/io.github.design_nexus.nixe.Chat.svg")),
     ];
     let dir = crate::paths::cache_dir().join("icons");
     for (name, svg) in ICONS {
