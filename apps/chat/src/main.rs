@@ -33,7 +33,7 @@ use gtk::{gio, glib};
 
 const APP_ID: &str = "io.github.design_nexus.nixe.Chat";
 
-const USAGE: &str = "Usage: chat [OPTION…]\n\
+const USAGE: &str = "Usage: nixe-chat [OPTION…]\n\
 \n\
   --section ID     open a page: chat, models, marketplace, arena, knowledge, prompts, stats, settings\n\
   --new            start a new chat\n\

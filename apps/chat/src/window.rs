@@ -859,7 +859,7 @@ pub fn toast_action(message: &str, action: &str, f: impl Fn() + 'static) {
 
 fn show_toast(message: &str, action: ToastAction<'_>) {
     let Some(ui) = ui() else {
-        eprintln!("chat: {message}");
+        eprintln!("nixe-chat: {message}");
         return;
     };
     let overlay = ui.borrow().overlay.clone();
