@@ -2210,6 +2210,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gtk4",
+ "nixe-core",
+ "nixe-theme",
  "serde",
  "toml",
 ]
@@ -2297,6 +2299,12 @@ dependencies = [
 [[package]]
 name = "nixe-core"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gtk4",
+ "serde",
+ "toml",
+]
 
 [[package]]
 name = "nixe-icons"
@@ -2305,6 +2313,12 @@ version = "0.1.0"
 [[package]]
 name = "nixe-theme"
 version = "0.1.0"
+dependencies = [
+ "gtk4",
+ "nixe-core",
+ "serde",
+ "toml",
+]
 
 [[package]]
 name = "nixe-ui"
