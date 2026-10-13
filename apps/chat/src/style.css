@@ -1,0 +1,2166 @@
+/* Chat — Nexus app style (see ~/Projects/STYLE.md). One flat surface split by
+ * hairlines, monospace throughout. Every color comes from the @theme_* tokens
+ * defined by the active palette (see theme.rs), or from the mixes of them below. */
+
+@define-color hairline mix(@theme_bg, @theme_border, 0.82);
+@define-color divider alpha(@theme_text, 0.08);
+@define-color nav_active mix(@theme_bg, @theme_accent, 0.18);
+@define-color row_hover mix(@theme_bg, @theme_accent, 0.07);
+@define-color lift mix(@theme_bg, @theme_muted, 0.09);
+@define-color lift_active mix(@lift, @theme_accent, 0.1);
+@define-color veil alpha(mix(@theme_bg, @theme_shadow, 0.45), 0.82);
+
+window.chat-window {
+  background: @theme_bg;
+  color: @theme_text;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-weight: 500;
+}
+
+window.chat-window,
+window.chat-window popover,
+window.chat-window dialog {
+  font-size: 1.0em;
+}
+
+.mono,
+.value-readout {
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-feature-settings: "tnum";
+}
+
+/* ---------- Top bar and status bar ---------- */
+
+.window-frame {
+  background: @theme_bg;
+}
+
+.top-bar {
+  min-height: 46px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid @hairline;
+}
+
+.crumbs {
+  margin-left: 8px;
+}
+
+.crumb-root,
+.crumb-sep {
+  color: @theme_dim_text;
+}
+
+.crumb {
+  color: @theme_accent;
+}
+
+window.chat-window button.bar-button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.bar-button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+/* A config-file menu in the top bar looks like the other bar buttons. */
+window.chat-window menubutton.bar-button > button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window menubutton.bar-button > button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window entry.bar-search {
+  min-height: 30px;
+  margin-right: 4px;
+}
+
+.status-bar {
+  min-height: 34px;
+  padding: 0 16px 0 10px;
+  border-top: 1px solid @hairline;
+  font-size: 0.86em;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.status-help {
+  min-height: 24px;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: @theme_dim_text;
+  font-weight: 500;
+}
+
+window.chat-window button.status-help:hover {
+  color: @theme_text;
+}
+
+.status-key {
+  color: @theme_text;
+}
+
+/* ---------- Sidebar ---------- */
+
+.settings-navigation {
+  background: @theme_bg;
+  min-width: 250px;
+  padding: 10px 6px;
+  border-right: 1px solid @hairline;
+}
+
+.settings-navigation.compact {
+  min-width: 0;
+  padding: 10px 6px;
+}
+
+.settings-navigation.compact button.nav-item {
+  min-width: 40px;
+  padding: 0;
+}
+
+.settings-navigation .nav-group {
+  margin: 10px -6px 4px;
+  padding: 16px 18px 4px;
+  border-top: 1px solid @hairline;
+  font-size: 0.76em;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: @theme_dim_text;
+}
+
+.settings-navigation .nav-group.first {
+  margin-top: 0;
+  padding-top: 6px;
+  border-top: none;
+}
+
+.settings-navigation.compact .nav-group {
+  /* Just the hairline, across the column. */
+  min-width: 12px;
+  margin: 8px -6px;
+  padding: 0;
+  min-height: 0;
+  font-size: 0;
+}
+
+.settings-navigation.compact .nav-group.first {
+  border-top: none;
+  margin: 0;
+}
+
+.settings-navigation button.nav-item {
+  min-height: 42px;
+  padding: 0 12px;
+  margin: 1px 0;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: @theme_text;
+  font-weight: 500;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+
+.settings-navigation button.nav-item image {
+  color: @theme_dim_text;
+}
+
+.settings-navigation button.nav-item:hover {
+  background: @row_hover;
+}
+
+.settings-navigation button.nav-item.active {
+  background: @nav_active;
+  box-shadow: none;
+}
+
+.settings-navigation button.nav-item .nav-label {
+  font-weight: 500;
+}
+
+/* ---------- Search ---------- */
+
+entry.settings-search,
+searchbar entry,
+entry.settings-search > text {
+  min-height: 36px;
+}
+
+entry.settings-search {
+  margin: 0 0 14px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
+  box-shadow: none;
+  color: @theme_text;
+  outline: none;
+}
+
+entry.settings-search:focus-within {
+  border-color: @theme_accent;
+  box-shadow: none;
+}
+
+entry.settings-search image {
+  color: @theme_dim_text;
+}
+
+/* ---------- Content ---------- */
+
+.settings-content {
+  background: @theme_bg;
+}
+
+.settings-page {
+  padding: 12px 24px 36px;
+}
+
+/* A page's first heading sits right under the top padding, so the space
+ * above it matches the space below it. */
+.settings-page > .settings-group:first-child > .group-title,
+.settings-page > .settings-group:first-child > .group-head,
+.settings-page > .settings-group:first-child > box:first-child > .group-title,
+.group-title.page-first,
+.group-head.page-first {
+  margin-top: 0;
+}
+
+.settings-page.narrow {
+  padding: 12px 16px 32px;
+}
+
+/* Pages that fill the window (tables, grids) run edge to edge under their
+ * toolbar; their parts bring their own padding. */
+.settings-page.fill,
+.settings-page.fill.narrow {
+  padding: 0;
+}
+
+/* A dialog's bold title. */
+.dialog-card .dialog-title {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: @theme_text;
+}
+
+.group-title {
+  margin: 26px 2px 12px;
+  font-size: 0.9em;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: @theme_dim_text;
+}
+
+.group-note {
+  margin: -6px 2px 12px;
+  font-size: 0.88em;
+  color: @theme_dim_text;
+}
+
+.settings-group {
+  /* the rows provide the chrome */
+}
+
+/* A row on its own draws its own card; rows in a group share the group's. */
+.settings-option {
+  border: 1px solid @hairline;
+  border-radius: 10px;
+  min-height: 52px;
+  padding: 10px 20px;
+}
+
+.group-list {
+  border: 1px solid @hairline;
+  border-radius: 10px;
+}
+
+.group-list .settings-option {
+  border: none;
+  border-top: 1px solid @divider;
+  border-radius: 0;
+}
+
+.group-list > .settings-option:first-child,
+.group-list > box:first-child > .settings-option:first-child {
+  border-top: none;
+}
+
+.settings-option.tall {
+  padding: 14px 20px;
+}
+
+.settings-option-title {
+  color: @theme_text;
+  font-weight: 700;
+}
+
+.settings-option-description {
+  color: @theme_dim_text;
+  font-size: 0.88em;
+}
+
+.settings-option-description link {
+  color: @theme_accent;
+}
+
+.settings-option .managed-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 999px;
+  background: @theme_accent;
+  margin-right: 2px;
+}
+
+.value-readout {
+  color: @theme_text;
+  min-width: 64px;
+}
+
+.dim {
+  color: @theme_dim_text;
+}
+
+.danger-text {
+  color: @theme_danger;
+}
+
+.accent-text {
+  color: @theme_accent;
+}
+
+/* ---------- Buttons ---------- */
+
+window.chat-window button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
+  box-shadow: none;
+  color: @theme_text;
+  transition: background 150ms ease-out, border-color 150ms ease-out;
+}
+
+window.chat-window button:hover {
+  background: @row_hover;
+}
+
+window.chat-window button:active {
+  background: alpha(@theme_accent, 0.22);
+}
+
+window.chat-window button:disabled {
+  opacity: 0.45;
+}
+
+window.chat-window button.suggested-action {
+  background: @nav_active;
+  border-color: transparent;
+  color: @theme_text;
+  font-weight: 600;
+}
+
+window.chat-window button.suggested-action image {
+  color: @theme_accent;
+}
+
+window.chat-window button.suggested-action:hover {
+  background: mix(@theme_bg, @theme_accent, 0.26);
+}
+
+window.chat-window button.destructive-action {
+  background: alpha(@theme_danger, 0.12);
+  border-color: alpha(@theme_danger, 0.55);
+  color: @theme_danger;
+}
+
+window.chat-window button.flat {
+  background: transparent;
+  border-color: transparent;
+}
+
+window.chat-window button.flat:hover {
+  background: @row_hover;
+}
+
+window.chat-window menubutton.flat > button,
+window.chat-window togglebutton.flat,
+window.chat-window button.toggle.flat {
+  background: transparent;
+  border-color: transparent;
+}
+
+window.chat-window menubutton.flat > button:hover,
+window.chat-window menubutton.flat > button:checked {
+  background: @row_hover;
+}
+
+window.chat-window button.toggle.flat:checked {
+  background: @nav_active;
+}
+
+window.chat-window button.toggle.flat:checked image {
+  color: @theme_accent;
+}
+
+window.chat-window button.reset-button {
+  min-height: 26px;
+  min-width: 26px;
+  padding: 0;
+  border-radius: 999px;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.chip {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+window.chat-window button.chip.selected {
+  background: @nav_active;
+  border-color: transparent;
+  color: @theme_text;
+}
+
+/* ---------- Inputs ---------- */
+
+window.chat-window entry,
+window.chat-window spinbutton {
+  min-height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
+  box-shadow: none;
+  color: @theme_text;
+}
+
+window.chat-window entry:focus-within,
+window.chat-window spinbutton:focus-within {
+  border-color: @theme_accent;
+  box-shadow: none;
+}
+
+window.chat-window dropdown > button {
+  min-width: 160px;
+}
+
+window.chat-window popover > contents {
+  background: @theme_surface;
+  border: 1px solid @hairline;
+  border-radius: 10px;
+  color: @theme_text;
+  padding: 4px;
+}
+
+window.chat-window popover listview > row,
+window.chat-window popover list > row {
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: @theme_text;
+}
+
+window.chat-window popover listview > row:hover,
+window.chat-window popover list > row:hover,
+window.chat-window popover listview > row:selected {
+  background: alpha(@theme_accent, 0.18);
+}
+
+window.chat-window switch {
+  min-width: 44px;
+  min-height: 26px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.3);
+  border: 1px solid @hairline;
+  box-shadow: none;
+}
+
+window.chat-window switch:checked {
+  background: mix(@theme_bg, @theme_accent, 0.25);
+}
+
+window.chat-window switch > slider {
+  min-width: 18px;
+  min-height: 18px;
+  margin: 3px;
+  border-radius: 999px;
+  background: @theme_dim_text;
+  border: none;
+  box-shadow: none;
+}
+
+window.chat-window switch:checked > slider {
+  background: @theme_accent;
+}
+
+window.chat-window scale {
+  padding: 8px 4px;
+}
+
+window.chat-window scale > trough {
+  min-height: 4px;
+  min-width: 4px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.8);
+  border: none;
+}
+
+window.chat-window scale > trough > highlight {
+  border-radius: 999px;
+  background: @theme_accent;
+}
+
+window.chat-window scale > trough > slider,
+window.chat-window scale.marks-before > trough > slider,
+window.chat-window scale.marks-after > trough > slider {
+  -gtk-icon-source: none;
+  background-image: none;
+  min-width: 16px;
+  min-height: 16px;
+  margin: -7px;
+  border-radius: 999px;
+  background: @theme_text;
+  border: 2px solid @theme_accent;
+}
+
+window.chat-window scale:disabled {
+  opacity: 0.5;
+}
+
+window.chat-window scale marks {
+  color: alpha(@theme_dim_text, 0.7);
+}
+
+window.chat-window scrollbar {
+  background: transparent;
+}
+
+window.chat-window scrollbar slider {
+  min-width: 6px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.9);
+}
+
+/* ---------- Theme swatches ---------- */
+
+.theme-card {
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid @hairline;
+  background: transparent;
+}
+
+.theme-card:hover {
+  border-color: alpha(@theme_accent, 0.6);
+}
+
+.theme-card.selected {
+  border-color: @theme_accent;
+}
+
+.theme-card picture {
+  border-radius: 9px 9px 0 0;
+}
+
+.theme-card .theme-card-name {
+  padding: 8px 10px;
+  font-weight: 600;
+}
+
+.swatch {
+  min-width: 16px;
+  min-height: 16px;
+  border-radius: 4px;
+  border: 1px solid alpha(@theme_shadow, 0.4);
+}
+
+/* ---------- Banners and dialogs ---------- */
+
+.banner {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: alpha(@theme_accent, 0.12);
+  border: 1px solid alpha(@theme_accent, 0.45);
+  margin-bottom: 14px;
+}
+
+.banner.warning {
+  background: alpha(@theme_danger, 0.1);
+  border-color: alpha(@theme_danger, 0.45);
+}
+
+/* Buttons on a banner are its action: a solid accent, so they stand out on the tint. */
+window.chat-window .banner button {
+  background: @theme_accent;
+  border-color: @theme_accent;
+  color: @theme_on_accent;
+  font-weight: 600;
+}
+
+window.chat-window .banner button:hover {
+  background: mix(@theme_accent, @theme_text, 0.12);
+}
+
+window.chat-window .banner.warning button {
+  background: @theme_danger;
+  border-color: @theme_danger;
+}
+
+window.chat-window .banner.warning button:hover {
+  background: mix(@theme_danger, @theme_text, 0.12);
+}
+
+.toast {
+  /* Above the status bar (and the message bar on the chat page). */
+  margin: 18px 18px 56px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: @theme_surface;
+  border: 1px solid @hairline;
+}
+
+window.chat-window button.toast-action {
+  min-height: 28px;
+  margin: -4px -8px -4px 0;
+  padding: 0 12px;
+  font-weight: 700;
+  color: @theme_accent;
+}
+
+window.chat-window button.toast-action:hover {
+  background: alpha(@theme_accent, 0.14);
+}
+
+.dialog-card {
+  background: @theme_bg;
+  border: 1px solid @hairline;
+  border-radius: 14px;
+  padding: 24px;
+}
+
+.code-block {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.86em;
+  background: alpha(@theme_shadow, 0.35);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: @theme_text;
+}
+
+textview.code-block > text {
+  background: transparent;
+  color: @theme_text;
+}
+
+.key-cap {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.85em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: alpha(@theme_muted, 0.55);
+  border: 1px solid @hairline;
+}
+
+/* ---------- Tags ---------- */
+
+.tag {
+  font-size: 0.72em;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.55);
+  color: @theme_dim_text;
+}
+
+.tag.accent {
+  background: alpha(@theme_accent, 0.18);
+  color: @theme_text;
+}
+
+.tag.danger {
+  background: alpha(@theme_danger, 0.14);
+  color: @theme_danger;
+}
+
+/* ---------- Tables ---------- */
+
+/* A page's toolbar sits on a hairline above its table. */
+.toolbar,
+.list-toolbar {
+  min-height: 46px;
+  margin: 0;
+  padding: 0 12px 0 14px;
+  background: transparent;
+  border-bottom: 1px solid @hairline;
+}
+
+/* A line of help above a list, on the same hairline as a toolbar. */
+.page-hint {
+  padding: 12px 14px;
+  border-bottom: 1px solid @hairline;
+  color: @theme_dim_text;
+}
+
+/* Toolbar controls sit centred in the row instead of stretching to it. */
+.toolbar > *,
+.list-toolbar > * {
+  margin-top: 7px;
+  margin-bottom: 7px;
+}
+
+.table-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+window.chat-window columnview {
+  background: transparent;
+  color: @theme_text;
+}
+
+window.chat-window columnview > header {
+  background: transparent;
+  border-bottom: 1px solid @hairline;
+}
+
+window.chat-window columnview > header > button {
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid @hairline;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window columnview > header > button:first-child {
+  border-left: none;
+}
+
+window.chat-window columnview > header,
+window.chat-window columnview > header > button,
+window.chat-window columnview > header > button > box {
+  font-size: 1em;
+}
+
+window.chat-window columnview > header > button > box > label {
+  font-size: 0.86em;
+  font-weight: 500;
+  color: @theme_dim_text;
+}
+
+window.chat-window columnview > header > button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window columnview > header > button sort-indicator {
+  color: @theme_accent;
+}
+
+window.chat-window columnview > listview {
+  background: transparent;
+}
+
+window.chat-window columnview > listview > row {
+  border-radius: 0;
+  margin: 0;
+  min-height: 35px;
+}
+
+window.chat-window columnview > listview > row:hover {
+  background: @row_hover;
+}
+
+window.chat-window columnview > listview > row:selected {
+  background: @nav_active;
+  box-shadow: none;
+  color: @theme_text;
+}
+
+window.chat-window columnview > listview > row > cell {
+  padding: 6px 16px;
+}
+
+.cell-dim {
+  color: @theme_dim_text;
+}
+
+.tree-expander {
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin: 0;
+}
+
+window.chat-window button.tree-expander {
+  min-height: 18px;
+  min-width: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.tree-expander:hover {
+  background: @row_hover;
+}
+
+.empty-state {
+  padding: 40px;
+  color: @theme_dim_text;
+}
+
+window.chat-window list.table-card {
+  background: transparent;
+  color: @theme_text;
+}
+
+window.chat-window list.table-card > row {
+  border-radius: 0;
+  margin: 0;
+}
+
+window.chat-window list.table-card > row:hover {
+  background: @row_hover;
+}
+
+window.chat-window list.table-card > row:selected {
+  background: @nav_active;
+  box-shadow: none;
+}
+
+/* ---------- Segmented control ---------- */
+
+.segmented {
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
+  padding: 2px;
+}
+
+window.chat-window .segmented button.segment {
+  min-height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: alpha(@theme_text, 0.78);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+window.chat-window .segmented button.segment:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window .segmented button.segment:checked {
+  background: @nav_active;
+  color: @theme_text;
+}
+
+/* ---------- Settings card ---------- */
+
+.settings-veil {
+  background: @veil;
+}
+
+.settings-dialog {
+  background: @theme_bg;
+  border: 1px solid @hairline;
+  border-radius: 14px;
+}
+
+.settings-dialog-side {
+  min-width: 280px;
+  padding: 22px 14px;
+  border-right: 1px solid @hairline;
+}
+
+.settings-dialog.narrow .settings-dialog-side {
+  min-width: 200px;
+  padding: 18px 8px;
+}
+
+.settings-dialog.narrow .dialog-head {
+  padding: 0 12px 0 20px;
+}
+
+.settings-dialog.narrow .settings-dialog-main .settings-page {
+  padding: 16px 16px 24px;
+}
+
+.dialog-heading {
+  margin: 0 4px 16px;
+  font-size: 0.92em;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.dialog-nav {
+  min-height: 0;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+}
+
+window.chat-window button.dialog-nav image {
+  margin-top: 2px;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.dialog-nav:hover {
+  background: @row_hover;
+}
+
+window.chat-window button.dialog-nav.active {
+  background: @lift_active;
+}
+
+window.chat-window button.dialog-nav.active image {
+  color: @theme_accent;
+}
+
+.dialog-nav-title {
+  font-weight: 600;
+  color: alpha(@theme_text, 0.82);
+}
+
+window.chat-window button.dialog-nav.active .dialog-nav-title {
+  color: @theme_text;
+}
+
+.dialog-nav-summary {
+  font-size: 0.86em;
+  color: @theme_dim_text;
+}
+
+.settings-dialog-main {
+  background: @lift;
+}
+
+.dialog-head {
+  min-height: 64px;
+  padding: 0 18px 0 32px;
+  border-bottom: 1px solid @hairline;
+}
+
+.dialog-title {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.dialog-empty {
+  color: @theme_dim_text;
+}
+
+.settings-dialog-main .settings-page {
+  padding: 28px 40px 40px;
+}
+
+.settings-dialog-main .settings-page.narrow {
+  padding: 20px 20px 28px;
+}
+
+/* ---------- Sidebar readouts and footer ---------- */
+
+.settings-navigation .nav-readout {
+  font-size: 0.78em;
+  color: @theme_dim_text;
+}
+
+.settings-navigation button.nav-item.active .nav-readout {
+  color: @theme_text;
+}
+
+window.chat-window button.live-pill {
+  min-height: 24px;
+  padding: 0 10px;
+  font-size: 0.8em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.live-pill.paused {
+  background: alpha(@theme_danger, 0.12);
+  border-color: alpha(@theme_danger, 0.55);
+  color: @theme_danger;
+}
+
+/* ---------- Stat tiles ---------- */
+
+window.chat-window button.stat-tile {
+  padding: 12px 14px 10px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid @hairline;
+  min-width: 150px;
+}
+
+window.chat-window button.stat-tile:hover {
+  background: @row_hover;
+  border-color: alpha(@theme_accent, 0.55);
+}
+
+.stat-title {
+  font-size: 0.76em;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: @theme_dim_text;
+}
+
+.stat-value {
+  font-size: 1.5em;
+  font-weight: 800;
+  color: @theme_text;
+}
+
+.stat-sub {
+  font-size: 0.82em;
+  color: @theme_dim_text;
+}
+
+/* ---------- Graphs ---------- */
+
+.graph-card {
+  background: mix(@theme_bg, @theme_surface, 0.5);
+  border: 1px solid @hairline;
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.graph-card-title {
+  font-weight: 700;
+  color: @theme_text;
+}
+
+.graph-legend {
+  font-size: 0.86em;
+}
+
+.legend-label {
+  color: @theme_dim_text;
+}
+
+.legend-value {
+  color: @theme_text;
+  font-weight: 700;
+}
+
+.legend-swatch {
+  min-width: 16px;
+  min-height: 3px;
+  border-radius: 2px;
+}
+
+.legend-swatch.tone-accent { background: @theme_accent; }
+.legend-swatch.tone-second { background: mix(@theme_accent, @theme_danger, 0.55); }
+
+.legend-swatch.dashed {
+  min-height: 0;
+  background: none;
+  border-top: 2px dashed mix(@theme_accent, @theme_danger, 0.55);
+}
+
+.graph-plot {
+  background: alpha(@theme_bg, 0.35);
+  border-radius: 4px;
+}
+
+.graph-axis {
+  font-size: 0.72em;
+  color: @theme_dim_text;
+}
+
+.graph-plot .graph-axis {
+  margin: 3px 6px;
+  color: alpha(@theme_dim_text, 0.9);
+}
+
+.graph-tip {
+  font-size: 0.8em;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: @theme_surface;
+  border: 1px solid @hairline;
+  color: @theme_text;
+}
+
+.core-cell {
+  background: mix(@theme_bg, @theme_surface, 0.5);
+  border: 1px solid @hairline;
+  border-radius: 6px;
+  padding: 6px 8px 4px;
+  min-width: 96px;
+}
+
+.core-cell .core-name {
+  font-size: 0.74em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+.core-cell .core-value {
+  font-size: 0.8em;
+  color: @theme_text;
+}
+
+/* ---------- Key figures ---------- */
+
+.kv-key {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+.kv-value {
+  font-size: 1.05em;
+  font-weight: 700;
+  color: @theme_text;
+}
+
+/* ---------- Usage bars ---------- */
+
+window.chat-window levelbar > trough {
+  min-height: 6px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.8);
+  border: none;
+  padding: 0;
+}
+
+window.chat-window levelbar > trough > block {
+  min-height: 6px;
+  border-radius: 999px;
+  border: none;
+}
+
+window.chat-window levelbar > trough > block.filled {
+  background: @theme_accent;
+}
+
+window.chat-window levelbar > trough > block.filled.hot {
+  background: @theme_danger;
+}
+
+window.chat-window levelbar > trough > block.empty {
+  background: transparent;
+}
+
+/* Memory composition bar: used / cached / free. */
+.composition {
+  min-height: 10px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.8);
+}
+
+.legend-key {
+  min-width: 10px;
+  min-height: 10px;
+  border-radius: 3px;
+  background: alpha(@theme_muted, 0.8);
+}
+
+.legend-key.part-used { background: @theme_accent; }
+.legend-key.part-cached { background: alpha(@theme_accent, 0.4); }
+
+.composition .part-used { background: @theme_accent; border-radius: 999px 0 0 999px; }
+.composition .part-cached { background: alpha(@theme_accent, 0.4); }
+
+
+.cell-num {
+  font-feature-settings: "tnum";
+  font-size: 0.92em;
+}
+
+.cell-hot {
+  color: @theme_accent;
+  font-weight: 700;
+}
+
+.details-panel {
+  margin-top: 10px;
+  border: 1px solid @hairline;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.details-title {
+  font-size: 1.1em;
+  font-weight: 700;
+}
+
+window.chat-window list.service-list {
+  background: transparent;
+  color: @theme_text;
+}
+
+window.chat-window list.service-list > row {
+  padding: 0 0 6px;
+  background: transparent;
+}
+
+/* =====================================================================
+ * Chat
+ * ===================================================================== */
+
+.small-text {
+  font-size: 0.82em;
+}
+
+.field-label {
+  margin-top: 4px;
+  font-size: 0.82em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.tiny {
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0 4px;
+  border-radius: 6px;
+}
+
+window.chat-window button.small {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 0.85em;
+}
+
+window.chat-window button.chip:checked,
+window.chat-window togglebutton.chip:checked,
+window.chat-window button.chip.selected {
+  background: @nav_active;
+  border-color: transparent;
+  color: @theme_text;
+}
+
+window.chat-window button.chip:checked image,
+window.chat-window button.chip.selected image {
+  color: @theme_accent;
+}
+
+/* Segmented control */
+.segmented {
+  background: transparent;
+  border: 1px solid @hairline;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+window.chat-window .segmented > button {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  color: alpha(@theme_text, 0.78);
+}
+
+window.chat-window .segmented > button:hover {
+  background: @row_hover;
+}
+
+window.chat-window .segmented > button.selected {
+  background: @nav_active;
+  color: @theme_text;
+}
+
+/* Text areas */
+.text-area-frame {
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
+}
+
+.text-area-frame:focus-within {
+  border-color: @theme_accent;
+}
+
+textview.text-area,
+textview.text-area > text {
+  background: transparent;
+  color: @theme_text;
+}
+
+/* Menus */
+window.chat-window popover.menu > contents {
+  padding: 4px;
+}
+
+window.chat-window button.menu-row {
+  min-height: 32px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+window.chat-window button.menu-row:hover {
+  background: alpha(@theme_accent, 0.18);
+}
+
+.menu-heading-small {
+  margin: 8px 10px 4px;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: alpha(@theme_dim_text, 0.85);
+}
+
+.popover-body {
+  padding: 8px;
+}
+
+/* ---------- Sidebar: group labels and the chat list ---------- */
+
+/* A group label's flat + sits at its right end, on the label's line. */
+window.chat-window .nav-group button.nav-add {
+  min-width: 22px;
+  min-height: 22px;
+  margin: -6px -8px -6px 0;
+  padding: 0;
+  border: none;
+  font-size: 1rem;
+  color: @theme_dim_text;
+}
+
+window.chat-window .nav-group button.nav-add:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+.chat-date-group {
+  margin: 10px 12px 2px;
+  font-size: 0.76em;
+  color: @theme_dim_text;
+}
+
+.chat-list-empty {
+  margin: 4px 12px 6px;
+  font-size: 0.86em;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.chat-item {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: alpha(@theme_text, 0.78);
+}
+
+window.chat-window button.chat-item:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window button.chat-item.active {
+  background: @nav_active;
+  color: @theme_text;
+}
+
+window.chat-window .chat-row.in-folder button.chat-item {
+  padding-left: 30px;
+}
+
+window.chat-window button.chat-item.folder-item {
+  font-weight: 600;
+}
+
+window.chat-window button.chat-item.folder-item image {
+  color: @theme_dim_text;
+}
+
+window.chat-window button.chat-item.search-result {
+  padding: 6px 10px;
+}
+
+.chat-title {
+  font-weight: 500;
+}
+
+.chat-snippet {
+  font-size: 0.82em;
+  color: @theme_dim_text;
+}
+
+window.chat-window menubutton.row-menu > button {
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+window.chat-window menubutton.row-menu {
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+  margin-right: 2px;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+window.chat-window .chat-row:hover menubutton.row-menu,
+window.chat-window menubutton.row-menu:active {
+  opacity: 1;
+}
+
+window.chat-window button.archive-toggle {
+  margin-top: 10px;
+  font-size: 0.86em;
+  color: @theme_dim_text;
+}
+
+.status-dot {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 999px;
+  background: alpha(@theme_muted, 0.9);
+}
+
+.status-dot.on {
+  background: @theme_accent;
+}
+
+.status-dot.off {
+  background: @theme_danger;
+}
+
+/* The server switcher sits in the status bar, as quiet as its text. */
+window.chat-window .status-bar dropdown.host-switcher > button {
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 8px;
+  border-color: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window .status-bar dropdown.host-switcher > button:hover {
+  color: @theme_text;
+}
+
+.status-note {
+  color: @theme_dim_text;
+}
+
+/* ---------- Chat page ---------- */
+
+window.chat-window dropdown.model-picker > button {
+  min-height: 30px;
+}
+
+.chat-banners .banner {
+  margin: 12px 24px 0;
+}
+
+.messages-wrap {
+  padding: 0 24px;
+}
+
+.messages {
+  padding: 24px 0 24px;
+}
+
+.chat-footer {
+  background: @theme_bg;
+  border-top: 1px solid @hairline;
+  padding: 12px 0 0;
+}
+
+.composer-clamp {
+  margin: 0 24px;
+}
+
+.chat-empty {
+  padding: 40px 0;
+}
+
+.chat-empty-title {
+  color: @theme_dim_text;
+}
+
+.prompt-chips {
+  margin-top: 16px;
+}
+
+.chat-recent {
+  margin-top: 28px;
+}
+
+.chat-recent .group-title {
+  margin: 0 2px 10px;
+}
+
+window.chat-window button.recent-row {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 0;
+  border-top: 1px solid @divider;
+  font-weight: 500;
+}
+
+window.chat-window .group-list > button.recent-row:first-child {
+  border-top: none;
+  border-radius: 9px 9px 0 0;
+}
+
+window.chat-window .group-list > button.recent-row:last-child {
+  border-radius: 0 0 9px 9px;
+}
+
+.followups {
+  margin-top: 4px;
+}
+
+window.chat-window button.bar-button:checked {
+  background: @nav_active;
+  color: @theme_accent;
+}
+
+window.chat-window button.jump-bottom {
+  margin-bottom: 14px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  background: @theme_surface;
+  border: 1px solid @hairline;
+}
+
+/* User messages */
+.user-msg {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: @lift;
+  border: 1px solid @hairline;
+}
+
+.user-msg.editing {
+  border-color: @theme_accent;
+}
+
+.user-text {
+  color: @theme_text;
+}
+
+.file-chip {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid @hairline;
+  font-size: 0.86em;
+}
+
+.thumb {
+  border-radius: 10px;
+}
+
+window.chat-window button.thumb-btn {
+  padding: 0;
+  min-height: 0;
+  border: none;
+  background: transparent;
+}
+
+.msg-actions {
+  opacity: 0.35;
+  transition: opacity 150ms ease-out;
+}
+
+.user-turn:hover .msg-actions,
+.assistant-msg:hover .msg-actions {
+  opacity: 1;
+}
+
+.branch-nav label {
+  margin: 0 2px;
+}
+
+/* Assistant messages */
+.assistant-msg {
+  padding: 2px 0;
+}
+
+.compare-row > .assistant-msg,
+.live-box > .assistant-msg {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid @hairline;
+  background: transparent;
+}
+
+.live-box > .assistant-msg:only-child {
+  padding: 2px 0;
+  border: none;
+  background: none;
+}
+
+.compare-row > .assistant-msg.selected {
+  border-color: @theme_accent;
+}
+
+.model-name {
+  font-size: 0.82em;
+  font-weight: 700;
+  color: @theme_dim_text;
+}
+
+window.chat-window menubutton.msg-stats > button {
+  min-height: 22px;
+  padding: 0 6px;
+  color: alpha(@theme_dim_text, 0.85);
+}
+
+window.chat-window menubutton.msg-stats > button:hover {
+  color: @theme_text;
+}
+
+.stats-popover {
+  font-size: 0.9em;
+}
+
+.msg-stats {
+  font-size: 0.78em;
+  color: alpha(@theme_dim_text, 0.85);
+}
+
+.sources {
+  margin-top: 2px;
+}
+
+window.chat-window button.source-chip {
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.82em;
+  background: alpha(@theme_muted, 0.32);
+  border: 1px solid @hairline;
+}
+
+window.chat-window button.source-chip label {
+  color: @theme_text;
+  text-decoration-line: none;
+}
+
+/* Thinking */
+.thinking {
+  border-left: 2px solid alpha(@theme_accent, 0.45);
+  padding-left: 10px;
+}
+
+window.chat-window button.disclosure {
+  min-height: 28px;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.disclosure:hover {
+  background: @row_hover;
+}
+
+.thinking-title {
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.thinking-body {
+  margin: 4px 6px 6px;
+  font-size: 0.9em;
+  color: @theme_dim_text;
+}
+
+/* Tool calls */
+.tool-card {
+  border-radius: 6px;
+  border: 1px solid @hairline;
+  background: transparent;
+}
+
+.tool-card.failed {
+  border-color: alpha(@theme_danger, 0.45);
+}
+
+window.chat-window button.tool-head {
+  min-height: 34px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+}
+
+window.chat-window button.tool-head image {
+  color: @theme_accent;
+}
+
+.tool-title {
+  font-weight: 700;
+}
+
+.tool-summary {
+  color: @theme_dim_text;
+  font-size: 0.9em;
+}
+
+.tool-body {
+  padding: 4px 12px 12px;
+}
+
+.tool-result {
+  font-size: 0.84em;
+  color: @theme_dim_text;
+}
+
+.approval {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: alpha(@theme_accent, 0.12);
+  border: 1px solid alpha(@theme_accent, 0.45);
+}
+
+.approval-title {
+  font-weight: 700;
+}
+
+/* ---------- Markdown ---------- */
+
+.markdown label {
+  color: @theme_text;
+}
+
+.markdown label link,
+.markdown label > link {
+  color: @theme_accent;
+}
+
+.md-p {
+  line-height: 1.45;
+}
+
+.md-h1 { font-size: 1.45em; font-weight: 800; margin-top: 6px; }
+.md-h2 { font-size: 1.25em; font-weight: 800; margin-top: 6px; }
+.md-h3 { font-size: 1.1em; font-weight: 700; margin-top: 4px; }
+.md-h4 { font-weight: 700; }
+
+.md-marker {
+  min-width: 16px;
+  color: @theme_dim_text;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-feature-settings: "tnum";
+}
+
+.md-quote {
+  padding-left: 12px;
+  border-left: 3px solid alpha(@theme_accent, 0.55);
+}
+
+.md-quote label {
+  color: @theme_dim_text;
+}
+
+.md-code {
+  border-radius: 10px;
+  background: alpha(@theme_shadow, 0.35);
+  border: 1px solid @hairline;
+}
+
+.md-code-head {
+  padding: 2px 6px 2px 12px;
+  border-bottom: 1px solid @hairline;
+  font-size: 0.82em;
+}
+
+.md-code-body {
+  padding: 10px 14px;
+  font-size: 0.88em;
+}
+
+.md-table {
+  border: 1px solid @hairline;
+  border-radius: 6px;
+}
+
+.md-cell {
+  padding: 6px 10px;
+  border-bottom: 1px solid @hairline;
+}
+
+.md-cell.head {
+  background: alpha(@theme_muted, 0.32);
+}
+
+.md-rule {
+  background: alpha(@theme_border, 0.55);
+  min-height: 1px;
+  margin: 6px 0;
+}
+
+.md-html,
+.md-footnote {
+  font-size: 0.88em;
+  color: @theme_dim_text;
+}
+
+/* ---------- Composer ---------- */
+
+.composer-wrap {
+  padding: 0 0 16px;
+}
+
+.composer {
+  padding: 10px 10px 8px 14px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid @hairline;
+  transition: border-color 150ms ease-out;
+}
+
+.composer:focus-within {
+  border-color: @theme_accent;
+}
+
+textview.composer-text,
+textview.composer-text > text {
+  background: transparent;
+  color: @theme_text;
+}
+
+.composer-placeholder {
+  margin: 4px 0 0 2px;
+  color: alpha(@theme_dim_text, 0.85);
+}
+
+.composer-row {
+  margin-top: 2px;
+}
+
+window.chat-window button.send-button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+window.chat-window button.recording {
+  background: alpha(@theme_danger, 0.18);
+  border-color: alpha(@theme_danger, 0.6);
+  color: @theme_danger;
+}
+
+.composer-note {
+  margin-top: 6px;
+  font-size: 0.8em;
+  color: @theme_dim_text;
+}
+
+.attach-strip {
+  padding-bottom: 4px;
+}
+
+.attach-chip {
+  padding: 4px 4px 4px 6px;
+  border-radius: 10px;
+  background: alpha(@theme_bg, 0.6);
+  border: 1px solid @hairline;
+}
+
+.suggest-row {
+  padding: 4px 6px;
+}
+
+/* ---------- Side panel ---------- */
+
+.side-panel {
+  min-width: 320px;
+  background: @theme_bg;
+  border-left: 1px solid @hairline;
+}
+
+.panel-body,
+.artifact-panel {
+  padding: 18px 18px 30px;
+}
+
+.panel-body > * {
+  margin-bottom: 6px;
+}
+
+.panel-title {
+  font-size: 1.1em;
+  font-weight: 800;
+}
+
+.panel-heading {
+  margin-top: 14px;
+  font-size: 0.72em;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: @theme_dim_text;
+}
+
+.panel-note {
+  font-size: 0.82em;
+  color: @theme_dim_text;
+}
+
+.panel-label {
+  font-weight: 600;
+}
+
+.artifact-picture {
+  border-radius: 10px;
+  background: alpha(@theme_bg, 0.5);
+}
+
+/* ---------- JSON ---------- */
+
+.json-view {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: alpha(@theme_shadow, 0.25);
+  border: 1px solid @hairline;
+}
+
+.json-badge {
+  font-size: 0.8em;
+  font-weight: 700;
+  color: @theme_accent;
+}
+
+.json-key {
+  color: @theme_dim_text;
+}
+
+.json-string {
+  color: mix(@theme_accent, @theme_danger, 0.55);
+}
+
+.json-number {
+  color: @theme_danger;
+}
+
+/* ---------- Marketplace ---------- */
+
+.market-controls {
+  margin: 14px 0 12px;
+}
+
+window.chat-window button.market-card {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid @hairline;
+}
+
+window.chat-window button.market-card:hover {
+  border-color: @hairline;
+  background: @row_hover;
+}
+
+.market-detail-title {
+  font-size: 1.3em;
+  font-weight: 800;
+}
+
+.quant-row {
+  min-height: 48px;
+}
+
+.quant-row.recommended {
+  border-color: @theme_accent;
+}
+
+.quant-name {
+  font-weight: 700;
+}
+
+.readme-card {
+  padding: 16px 20px;
+  border-radius: 10px;
+  background: mix(@theme_bg, @theme_surface, 0.5);
+  border: 1px solid @hairline;
+}
+
+/* ---------- Arena and stats ---------- */
+
+.arena-row {
+  margin-top: 16px;
+}
+
+.arena-row > .assistant-msg {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid @hairline;
+  background: transparent;
+}
+
+.arena-votes {
+  margin: 14px 0 4px;
+}
+
+.board-rank {
+  font-weight: 800;
+  color: @theme_accent;
+}
+
+.stat-flow {
+  margin-top: 16px;
+}
+
+.stat-tile {
+  padding: 12px 14px 10px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid @hairline;
+}
+
+/* ---------- Quick ask ---------- */
+
+.quick-body {
+  background: @theme_bg;
+  padding: 18px 20px 16px;
+}
+
+.quick-context {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: alpha(@theme_accent, 0.08);
+  border: 1px solid alpha(@theme_accent, 0.35);
+}
+
+/* Model load bar under the picker */
+/* Along the picker's bottom edge, inside its border. */
+progressbar.model-load {
+  margin: 0 7px 1px;
+}
+
+progressbar.model-load > trough {
+  min-width: 0;
+  min-height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  border: none;
+}
+
+progressbar.model-load > trough > progress {
+  min-height: 2px;
+  border-radius: 999px;
+  background: alpha(@theme_accent, 0.85);
+  border: none;
+}
+
+progressbar.model-load.loaded > trough > progress {
+  background: @theme_accent;
+}
+
+/* Chat toolbar: equal 30 px icon buttons, like the top bar's. */
+window.chat-window button.tool-button,
+window.chat-window menubutton.tool-button > button {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.tool-button:hover,
+window.chat-window menubutton.tool-button > button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window button.tool-button:checked,
+window.chat-window menubutton.tool-button > button:checked {
+  background: @nav_active;
+  color: @theme_accent;
+}
+
+.chat-header .caps {
+  margin-right: 6px;
+}
+
+/* Context use in the message bar: as tall and quiet as the icons beside it. */
+.ctx-readout {
+  min-height: 32px;
+  padding: 0 8px;
+  margin-left: 4px;
+  border-radius: 6px;
+  color: @theme_dim_text;
+  font-size: 0.82em;
+  font-feature-settings: "tnum";
+}
+
+.ctx-readout:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+.ctx-readout.hot {
+  color: @theme_danger;
+}
+
+levelbar.ctx-bar > trough {
+  min-height: 4px;
+}
+
+levelbar.ctx-bar > trough > block {
+  min-height: 4px;
+}
+
+/* Message bar toggles: icon-only, quiet until on */
+window.chat-window button.bar-toggle,
+window.chat-window menubutton.bar-menu > button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: @theme_dim_text;
+}
+
+window.chat-window button.bar-toggle:hover,
+window.chat-window menubutton.bar-menu > button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.chat-window button.bar-toggle:checked,
+window.chat-window menubutton.bar-menu.selected > button {
+  background: alpha(@theme_accent, 0.16);
+  color: @theme_accent;
+}
+
+window.chat-window menubutton.bar-menu > button:checked {
+  background: alpha(@theme_accent, 0.22);
+}
+
+window.chat-window .group-list > button.recent-row:only-child {
+  border-radius: 9px;
+}
