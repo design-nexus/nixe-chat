@@ -60,6 +60,9 @@ if [[ -f $hypr ]]; then
   hyprctl reload >/dev/null 2>&1 || true
 fi
 
+# The suite's own command goes with the last app.
+compgen -G "$bin/nixe-*" >/dev/null || rm -f "$bin/nixe"
+
 update-desktop-database "$share/applications" 2>/dev/null || true
 gtk-update-icon-cache -q "$share/icons/hicolor" 2>/dev/null || true
 say "Done."

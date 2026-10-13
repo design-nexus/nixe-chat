@@ -520,7 +520,7 @@ pub const SHORTCUTS: &[(&[&str], &str)] = &[
     (&["Alt", "←"], "Back"),
     (&["Ctrl", "B"], "Collapse or expand the sidebar"),
     (&["Ctrl", ","], "Settings"),
-    (&["F1"], "Show these shortcuts"),
+    (&["F1"], "Show these shortcuts (or ?)"),
     (&["Ctrl", "Q"], "Close"),
 ];
 

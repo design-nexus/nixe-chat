@@ -73,16 +73,13 @@ command -v hyprctl >/dev/null || warn "Hyprland wasn't found. Nixe apps are made
 # ---------- Dependencies ----------
 if command -v pacman >/dev/null; then
   need=()
-  command -v cargo >/dev/null || need+=(rust)
-  wanted="gtk4 pkgconf gcc git"
+  wanted="gtk4 pkgconf gcc git curl"
   for a in "${apps[@]}"; do app_info "$a"; wanted+=" $deps"; done
   for p in $wanted; do pacman -Qq "$p" >/dev/null 2>&1 || need+=("$p"); done
   if ((${#need[@]})); then
     say "Installing ${need[*]}"
     sudo pacman -S --needed --noconfirm "${need[@]}"
   fi
-elif ! command -v cargo >/dev/null; then
-  die "Rust (cargo) and GTK 4 are needed to build Nixe apps. Install them and run this again."
 fi
 
 # ---------- Source ----------
@@ -91,13 +88,32 @@ here=""
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 locked=(--locked)
-if [[ -n $here && -f $here/Cargo.toml && -d $here/crates ]]; then
+# A release built by CI, for an app: its tag, or nothing.
+release_tag() {
+  curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=100" 2>/dev/null |
+    grep -o "\"tag_name\": *\"$1-v[^\"]*\"" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'
+}
+
+prebuilt=false
+if [[ -n $here && -f $here/.prebuilt ]]; then
   src=$here
+  prebuilt=true
+elif [[ -n $here && -f $here/Cargo.toml && -d $here/crates ]]; then
+  src=$here
+elif [[ ${NIXE_BUILD:-} != 1 ]] && tags=$(for a in "${apps[@]}"; do t=$(release_tag "$a"); [[ -n $t ]] || exit 1; echo "$t"; done); then
+  # Every app asked for has a release: unpack them over one another, no build.
+  say "Fetching ${apps[*]}"
+  src="$work/src"
+  mkdir -p "$src"
+  for t in $tags; do
+    curl -fsSL "https://github.com/$REPO/releases/download/$t/${t%-v*}-x86_64.tar.gz" | tar -xz -C "$src"
+  done
+  prebuilt=true
 else
   # Fetch only the shared crates and the apps asked for.
   say "Fetching the source"
   git clone -q --depth 1 --filter=blob:none --sparse "https://github.com/$REPO.git" "$work/src"
-  dirs=(crates)
+  dirs=(crates bin)
   for a in "${apps[@]}"; do app_info "$a"; dirs+=("apps/$dir"); done
   git -C "$work/src" sparse-checkout set "${dirs[@]}"
   src="$work/src"
@@ -106,10 +122,17 @@ else
 fi
 
 # ---------- Build ----------
-pkgs=()
-for a in "${apps[@]}"; do app_info "$a"; pkgs+=(-p "$pkg"); done
-say "Building ${apps[*]} (a few minutes the first time)"
-(cd "$src" && cargo build --release "${locked[@]}" "${pkgs[@]}")
+if [[ $prebuilt == false ]]; then
+  if ! command -v cargo >/dev/null; then
+    command -v pacman >/dev/null || die "Rust (cargo) is needed to build Nixe apps. Install it and run this again."
+    say "Installing rust"
+    sudo pacman -S --needed --noconfirm rust
+  fi
+  pkgs=()
+  for a in "${apps[@]}"; do app_info "$a"; pkgs+=(-p "$pkg"); done
+  say "Building ${apps[*]} (a few minutes the first time)"
+  (cd "$src" && cargo build --release "${locked[@]}" "${pkgs[@]}")
+fi
 
 # ---------- Install ----------
 bin="$HOME/.local/bin"
@@ -177,6 +200,9 @@ for a in "${apps[@]}"; do
     say "$a now opens its file types"
   fi
 done
+
+# The suite's own command: nixe list, install, update, uninstall.
+install -m 755 "$src/bin/nixe" "$bin/nixe"
 
 update-desktop-database "$desk" 2>/dev/null || true
 gtk-update-icon-cache -q "$share/icons/hicolor" 2>/dev/null || true
