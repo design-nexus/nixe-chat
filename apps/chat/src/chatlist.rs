@@ -12,6 +12,35 @@ use crate::{hub, models, transfer, util, widgets, window};
 
 thread_local! {
     static SHOW_ARCHIVED: Cell<bool> = const { Cell::new(false) };
+    /// Chats deleted a moment ago, hidden until the Undo toast has gone.
+    static DELETING: RefCell<Vec<i64>> = const { RefCell::new(Vec::new()) };
+}
+
+/// How long Undo is offered before a deleted chat is really gone.
+const UNDO_SECONDS: u32 = 7;
+
+/// Delete a chat with an Undo: it leaves the list now and the database once
+/// the toast has gone. If the app quits first, the chat stays.
+fn delete_with_undo(id: i64) {
+    DELETING.with(|d| d.borrow_mut().push(id));
+    chat::closed(id);
+    hub::emit(&hub::CHATS);
+    window::toast_action("Chat deleted", "Undo", move || {
+        DELETING.with(|d| d.borrow_mut().retain(|x| *x != id));
+        hub::emit(&hub::CHATS);
+    });
+    glib::timeout_add_seconds_local_once(UNDO_SECONDS, move || {
+        let still = DELETING.with(|d| {
+            let mut d = d.borrow_mut();
+            let had = d.contains(&id);
+            d.retain(|x| *x != id);
+            had
+        });
+        if still {
+            let _ = store::delete_chat(id);
+            hub::emit(&hub::CHATS);
+        }
+    });
 }
 
 /// The list, driven by `search`. Every instance (sidebar, history popover)
@@ -80,7 +109,8 @@ fn fill(list: &gtk::Box, query: &str) {
         return;
     }
     let archived = SHOW_ARCHIVED.with(|a| a.get());
-    let chats = store::chats(archived).unwrap_or_default();
+    let mut chats = store::chats(archived).unwrap_or_default();
+    DELETING.with(|d| chats.retain(|c| !d.borrow().contains(&c.id)));
 
     if archived {
         list.append(&group_label("Archived", None));
@@ -320,12 +350,10 @@ pub fn chat_menu(c: &Chat) -> gtk::Popover {
         window::toast(if archived { "Chat restored" } else { "Chat archived" });
     }));
     let p2 = pop.clone();
-    let del = widgets::two_click("Delete", "Click again to delete", move || {
+    let del = gtk::Button::with_label("Delete");
+    del.connect_clicked(move |_| {
         p2.popdown();
-        let _ = store::delete_chat(id);
-        chat::closed(id);
-        hub::emit(&hub::CHATS);
-        window::toast("Chat deleted");
+        delete_with_undo(id);
     });
     del.add_css_class("menu-row");
     v.append(&del);
