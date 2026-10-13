@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+# Install Nixe apps.
+#
+#   curl -fsSL https://raw.githubusercontent.com/design-nexus/nixe/main/install.sh | bash -s -- music pdf
+#   curl -fsSL https://raw.githubusercontent.com/design-nexus/nixe/main/install.sh | bash -s -- all
+#
+# Apps: settings tasks torrents pdf notepad music media-player chat fonts archive office photos
+# Options:
+#   --default  make the installed apps open their file types
+#   --gear     also add the Settings gear to the Omarchy bar (with settings)
+#   --list     list the apps and exit
+set -euo pipefail
+
+REPO="design-nexus/nixe"
+ALL=(settings tasks torrents pdf notepad music media-player chat fonts archive office photos)
+
+say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[33m==>\033[0m %s\n' "$*" >&2; }
+die() { printf '\033[31m==>\033[0m %s\n' "$*" >&2; exit 1; }
+
+# ---------- What each app is ----------
+# dir: folder under apps/   pkg: cargo package   bins: programs it installs
+# deps: Arch packages it needs   old_*: what the app was called before Nixe
+app_info() {
+  dir=$1 pkg="nixe-$1" bins="nixe-$1" deps="" ids="" old_bins="" old_desktops="" old_icons="" defaults=false
+  case $1 in
+    settings) ids="Settings" old_bins="settings settings-helper"; bins="nixe-settings nixe-settings-helper" ;;
+    tasks) ids="Tasks" old_bins="tasks" ;;
+    torrents) ids="Torrents" old_bins="torrents" deps="libtorrent-rasterbar boost" defaults=true ;;
+    pdf) ids="Pdf" old_bins="pdf" deps="poppler-glib" defaults=true ;;
+    notepad) ids="Notepad" old_bins="notepad" ;;
+    music) ids="Music" old_bins="music" deps="gstreamer gst-plugins-base gst-plugins-good gst-libav" defaults=true ;;
+    media-player) ids="MediaPlayer" old_bins="media-player" deps="mpv ffmpeg" defaults=true ;;
+    chat) ids="Chat" old_bins="chat" ;;
+    fonts) ids="Fonts" old_bins="fonts" deps="fontconfig pango tar xz" ;;
+    archive) ids="Archive" old_bins="archive" deps="7zip" defaults=true ;;
+    office)
+      bins="nixe-office nixe-write nixe-sheets nixe-present" ids="Write Sheets Present" defaults=true
+      deps="gtksourceview5 libspelling hunspell hunspell-en_us"
+      old_bins="nexus-office nexus-write nexus-sheets nexus-present"
+      old_desktops="nexus-write.desktop nexus-sheets.desktop nexus-present.desktop" ;;
+    photos)
+      dir=gallery bins="nixe-photos nixe-viewer" ids="Photos PhotoViewer" defaults=true
+      old_bins="nexus-photos npv nexus-photos-viewer" old_desktops="nexus-photos.desktop npv.desktop"
+      old_icons="io.github.nexus.photos.svg" ;;
+    *) return 1 ;;
+  esac
+  for id in $ids; do
+    [[ $1 == office || $1 == photos ]] || old_desktops+=" io.github.design_nexus.$id.desktop"
+    [[ $1 == photos ]] || old_icons+=" io.github.design_nexus.$id.svg"
+  done
+}
+
+# ---------- Arguments ----------
+apps=() make_default=false gear=false
+for a in "$@"; do
+  case $a in
+    all) apps=("${ALL[@]}") ;;
+    gallery) apps+=(photos) ;;
+    write | sheets | present) apps+=(office) ;;
+    --default) make_default=true ;;
+    --gear) gear=true ;;
+    --list) printf '%s\n' "${ALL[@]}"; exit 0 ;;
+    -h | --help) sed -n '2,13p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) app_info "$a" >/dev/null || die "No app called '$a'. Apps: ${ALL[*]}"; apps+=("$a") ;;
+  esac
+done
+((${#apps[@]})) || die "Name the apps to install (or 'all'): ${ALL[*]}"
+mapfile -t apps < <(printf '%s\n' "${apps[@]}" | awk '!seen[$0]++')
+
+command -v hyprctl >/dev/null || warn "Hyprland wasn't found. Nixe apps are made for Omarchy (Hyprland), but run elsewhere too."
+
+# ---------- Dependencies ----------
+if command -v pacman >/dev/null; then
+  need=()
+  command -v cargo >/dev/null || need+=(rust)
+  wanted="gtk4 pkgconf gcc git"
+  for a in "${apps[@]}"; do app_info "$a"; wanted+=" $deps"; done
+  for p in $wanted; do pacman -Qq "$p" >/dev/null 2>&1 || need+=("$p"); done
+  if ((${#need[@]})); then
+    say "Installing ${need[*]}"
+    sudo pacman -S --needed --noconfirm "${need[@]}"
+  fi
+elif ! command -v cargo >/dev/null; then
+  die "Rust (cargo) and GTK 4 are needed to build Nixe apps. Install them and run this again."
+fi
+
+# ---------- Source ----------
+here=""
+[[ -n ${BASH_SOURCE[0]:-} && -f ${BASH_SOURCE[0]} ]] && here=$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+locked=(--locked)
+if [[ -n $here && -f $here/Cargo.toml && -d $here/crates ]]; then
+  src=$here
+else
+  # Fetch only the shared crates and the apps asked for.
+  say "Fetching the source"
+  git clone -q --depth 1 --filter=blob:none --sparse "https://github.com/$REPO.git" "$work/src"
+  dirs=(crates)
+  for a in "${apps[@]}"; do app_info "$a"; dirs+=("apps/$dir"); done
+  git -C "$work/src" sparse-checkout set "${dirs[@]}"
+  src="$work/src"
+  # The lockfile lists every app; with only some present, cargo trims it.
+  locked=()
+fi
+
+# ---------- Build ----------
+pkgs=()
+for a in "${apps[@]}"; do app_info "$a"; pkgs+=(-p "$pkg"); done
+say "Building ${apps[*]} (a few minutes the first time)"
+(cd "$src" && cargo build --release "${locked[@]}" "${pkgs[@]}")
+
+# ---------- Install ----------
+bin="$HOME/.local/bin"
+share="${XDG_DATA_HOME:-$HOME/.local/share}"
+config="${XDG_CONFIG_HOME:-$HOME/.config}"
+desk="$share/applications"
+icons="$share/icons/hicolor/scalable/apps"
+mkdir -p "$bin" "$desk" "$icons"
+
+# A program of ours from before the rename: one that names the old app ids.
+ours() { [[ -f $1 ]] && grep -aqE 'design_nexus|nexus\.photos|nexus-office' "$1"; }
+
+mimeapps="$config/mimeapps.list"
+for a in "${apps[@]}"; do
+  app_info "$a"
+  d="$src/apps/$dir"
+  say "Installing $a"
+  for b in $bins; do
+    if [[ -f $src/target/release/$b ]]; then
+      install -m 755 "$src/target/release/$b" "$bin/$b"
+    elif [[ -f $d/packaging/$b ]]; then
+      install -m 755 "$d/packaging/$b" "$bin/$b"
+    fi
+  done
+  for f in "$d"/data/io.github.design_nexus.nixe.*.desktop; do install -m 644 "$f" "$desk/"; done
+  for f in "$d"/data/io.github.design_nexus.nixe.*.svg; do [[ -f $f ]] && install -m 644 "$f" "$icons/"; done
+  if [[ -f $d/data/nixe-office.xml ]]; then
+    mkdir -p "$share/mime/packages"
+    install -m 644 "$d/data/nixe-office.xml" "$share/mime/packages/"
+    rm -f "$share/mime/packages/nexus-office.xml"
+    update-mime-database "$share/mime" 2>/dev/null || true
+  fi
+
+  # The same app from before the rename.
+  for b in $old_bins; do ours "$bin/$b" && rm -f "$bin/$b" && say "Removed the old $b"; done
+  for f in $old_desktops; do rm -f "$desk/$f"; done
+  for f in $old_icons; do rm -f "$icons/$f"; done
+  if [[ -f $mimeapps ]]; then
+    for old in $old_desktops; do
+      case $old in
+        io.github.design_nexus.*) new=${old/design_nexus./design_nexus.nixe.} ;;
+        nexus-photos.desktop) new=io.github.design_nexus.nixe.Photos.desktop ;;
+        npv.desktop) new=io.github.design_nexus.nixe.PhotoViewer.desktop ;;
+        nexus-*.desktop) k=${old#nexus-}; k=${k%.desktop}; new="io.github.design_nexus.nixe.${k^}.desktop" ;;
+      esac
+      if grep -q "$old" "$mimeapps"; then
+        [[ -f $mimeapps.nixe-bak ]] || cp "$mimeapps" "$mimeapps.nixe-bak"
+        sed -i "s/\b${old//./\\.}/$new/g" "$mimeapps"
+      fi
+    done
+  fi
+
+  if [[ $make_default == true && $defaults == true ]]; then
+    for f in "$d"/data/io.github.design_nexus.nixe.*.desktop; do
+      # Write leaves plain text and Markdown to the text editor.
+      types=$(sed -n 's/^MimeType=//p' "$f" | tr ';' '\n' | grep -v '^text/plain$\|^text/markdown$\|x-nexus-' | tr '\n' ' ')
+      # shellcheck disable=SC2086
+      [[ -n ${types// /} ]] && xdg-mime default "$(basename "$f")" $types
+    done
+    say "$a now opens its file types"
+  fi
+done
+
+update-desktop-database "$desk" 2>/dev/null || true
+gtk-update-icon-cache -q "$share/icons/hicolor" 2>/dev/null || true
+
+# ---------- Hyprland: windows that open floating ----------
+hypr="$config/hypr"
+if [[ -f $hypr/hyprland.lua ]] && grep -q 'o\.window' "$hypr/hyprland.lua" 2>/dev/null; then
+  rules=""
+  [[ -x $bin/nixe-notepad ]] && rules+='o.window("^io\\.github\\.design_nexus\\.nixe\\.Notepad$", { float = true, center = true, size = { 900, 700 } })'$'\n'
+  [[ -x $bin/nixe-archive ]] && rules+='o.window("^io\\.github\\.design_nexus\\.nixe\\.Archive$", { float = true, center = true, size = { 960, 640 } })'$'\n'
+  if [[ -n $rules ]]; then
+    printf -- '-- Written by the Nixe installer: Nixe apps that open as floating windows.\n-- Reinstalling an app rewrites this file.\n%s' "$rules" >"$hypr/nixe.lua"
+    if ! grep -q 'require("hypr.nixe")' "$hypr/hyprland.lua"; then
+      cp "$hypr/hyprland.lua" "$hypr/hyprland.lua.bak.$(date +%s)"
+      # Drop the hand-written rule for Notepad's old window class; nixe.lua has it now.
+      sed -i '/^-- Nexus Notepad opens floating and centered\.$/d; /design_nexus\\\\\.Notepad\$"/d' "$hypr/hyprland.lua"
+      if grep -q '^require("hypr.settings")' "$hypr/hyprland.lua"; then
+        sed -i 's/^require("hypr.settings")/require("hypr.nixe") -- Nixe apps (floating windows)\n&/' "$hypr/hyprland.lua"
+      else
+        printf '\nrequire("hypr.nixe") -- Nixe apps (floating windows)\n' >>"$hypr/hyprland.lua"
+      fi
+    fi
+    if command -v hyprctl >/dev/null && hyprctl reload >/dev/null 2>&1; then
+      errors=$(hyprctl configerrors 2>/dev/null | grep -v '^$' || true)
+      [[ -z $errors || $errors == *"no errors"* ]] || warn "Hyprland reports: $errors"
+    fi
+  fi
+fi
+
+# ---------- Settings ----------
+if printf '%s\n' "${apps[@]}" | grep -qx settings; then
+  # Rewrite the managed Hyprland file so its bindings call the new programs.
+  if [[ -f $config/settings/state.json || -f $config/nixe-settings/state.json ]]; then
+    "$bin/nixe-settings" --apply || true
+  fi
+  if [[ $gear == true ]]; then
+    dest="$config/omarchy/plugins/design-nexus.settings-gear"
+    mkdir -p "$dest"
+    install -m 644 "$src/apps/settings/plugin/manifest.json" "$src/apps/settings/plugin/BarWidget.qml" "$dest/"
+    omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+    omarchy-plugin-enable design-nexus.settings-gear right >/dev/null 2>&1 || warn "Enable it from Settings → Plugins."
+  fi
+  if [[ -e /usr/local/lib/settings/settings-helper ]]; then
+    warn "The old account helper is still in /usr/local/lib/settings. Settings installs the new one when you next"
+    warn "change an account; then remove the old one with:"
+    warn "  sudo rm -r /usr/local/lib/settings /usr/share/polkit-1/actions/io.github.design_nexus.settings.policy"
+  fi
+fi
+
+case ":$PATH:" in
+  *":$bin:"*) ;;
+  *) warn "$bin isn't on your PATH; open the apps from the app launcher, or add it to PATH." ;;
+esac
+say "Done. Open ${apps[*]} from the app launcher."

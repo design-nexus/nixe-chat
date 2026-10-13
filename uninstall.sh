@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Remove Nixe apps.
+#
+#   ./uninstall.sh music pdf          remove those apps
+#   ./uninstall.sh all --purge        remove every app and its settings and data
+set -euo pipefail
+
+ALL=(settings tasks torrents pdf notepad music media-player chat fonts archive office photos)
+say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
+die() { printf '\033[31m==>\033[0m %s\n' "$*" >&2; exit 1; }
+
+apps=() purge=false
+for a in "$@"; do
+  case $a in
+    all) apps=("${ALL[@]}") ;;
+    gallery) apps+=(photos) ;;
+    write | sheets | present) apps+=(office) ;;
+    --purge) purge=true ;;
+    *) printf '%s\n' "${ALL[@]}" | grep -qx "$a" || die "No app called '$a'. Apps: ${ALL[*]}"; apps+=("$a") ;;
+  esac
+done
+((${#apps[@]})) || die "Name the apps to remove (or 'all'): ${ALL[*]}"
+
+bin="$HOME/.local/bin"
+share="${XDG_DATA_HOME:-$HOME/.local/share}"
+config="${XDG_CONFIG_HOME:-$HOME/.config}"
+for a in "${apps[@]}"; do
+  case $a in
+    settings) bins="nixe-settings nixe-settings-helper" ids="Settings" ;;
+    media-player) bins="nixe-media-player" ids="MediaPlayer" ;;
+    office) bins="nixe-office nixe-write nixe-sheets nixe-present" ids="Write Sheets Present" ;;
+    photos) bins="nixe-photos nixe-viewer" ids="Photos PhotoViewer" ;;
+    pdf) bins="nixe-pdf" ids="Pdf" ;;
+    *) bins="nixe-$a" ids="${a^}" ;;
+  esac
+  say "Removing $a"
+  for b in $bins; do pkill -x "$b" 2>/dev/null || true; rm -f "$bin/$b"; done
+  for id in $ids; do
+    rm -f "$share/applications/io.github.design_nexus.nixe.$id.desktop" "$share/icons/hicolor/scalable/apps/io.github.design_nexus.nixe.$id.svg"
+  done
+  [[ $a == office ]] && rm -f "$share/mime/packages/nixe-office.xml" && update-mime-database "$share/mime" 2>/dev/null || true
+  [[ $a == fonts && $purge == true ]] && rm -rf "$share/fonts/nixe-fonts"
+  [[ $a == settings ]] && rm -rf "$config/omarchy/plugins/design-nexus.settings-gear"
+  slug="nixe-$a"
+  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/${slug:?}"
+  if [[ $purge == true ]]; then
+    rm -rf "${config:?}/${slug:?}" "${share:?}/${slug:?}" "${XDG_STATE_HOME:-$HOME/.local/state}/${slug:?}"
+  fi
+done
+
+# Floating-window rules for apps that are gone.
+hypr="$config/hypr/nixe.lua"
+if [[ -f $hypr ]]; then
+  [[ -x $bin/nixe-notepad ]] || sed -i '/nixe\\\\.Notepad/d' "$hypr"
+  [[ -x $bin/nixe-archive ]] || sed -i '/nixe\\\\.Archive/d' "$hypr"
+  if ! grep -q 'o\.window' "$hypr"; then
+    rm -f "$hypr"
+    sed -i '/^require("hypr.nixe")/d' "$config/hypr/hyprland.lua" 2>/dev/null || true
+  fi
+  hyprctl reload >/dev/null 2>&1 || true
+fi
+
+update-desktop-database "$share/applications" 2>/dev/null || true
+gtk-update-icon-cache -q "$share/icons/hicolor" 2>/dev/null || true
+say "Done."
