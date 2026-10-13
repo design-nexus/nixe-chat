@@ -2248,7 +2248,7 @@ dependencies = [
 
 [[package]]
 name = "nixe-office"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "cairo-rs",
@@ -2288,7 +2288,7 @@ dependencies = [
 
 [[package]]
 name = "nixe-photos"
-version = "0.3.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2308,7 +2308,7 @@ dependencies = [
 
 [[package]]
 name = "nixe-settings"
-version = "0.7.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "gtk4",
