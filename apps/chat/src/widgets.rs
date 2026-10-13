@@ -1,4 +1,4 @@
-//! Nexus-style building blocks: pages, groups and option rows.
+//! Nixe-style building blocks: pages, groups and option rows.
 
 pub use nixe_ui::widgets::*;
 

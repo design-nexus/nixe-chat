@@ -1,4 +1,4 @@
-//! This app's own preferences (`~/.config/nexus-chat/settings.toml`).
+//! This app's own preferences (`~/.config/nixe-chat/settings.toml`).
 //!
 //! The GTK thread owns the live copy. Background work gets a clone.
 

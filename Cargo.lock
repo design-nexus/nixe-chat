@@ -2119,7 +2119,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
-name = "nexus-archive"
+name = "nixe-archive"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2134,7 +2134,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-chat"
+name = "nixe-chat"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2161,7 +2161,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-fonts"
+name = "nixe-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gtk4",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "nixe-fonts"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2177,7 +2187,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-media-player"
+name = "nixe-icons"
+version = "0.1.0"
+
+[[package]]
+name = "nixe-media-player"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2197,7 +2211,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-music"
+name = "nixe-music"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2220,7 +2234,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-notepad"
+name = "nixe-notepad"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2233,7 +2247,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-office"
+name = "nixe-office"
 version = "0.2.0"
 dependencies = [
  "anyhow",
@@ -2255,7 +2269,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-pdf"
+name = "nixe-pdf"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2273,7 +2287,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-photos"
+name = "nixe-photos"
 version = "0.3.0"
 dependencies = [
  "anyhow",
@@ -2293,7 +2307,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-tasks"
+name = "nixe-settings"
+version = "0.7.1"
+dependencies = [
+ "anyhow",
+ "gtk4",
+ "nixe-core",
+ "nixe-theme",
+ "nixe-ui",
+ "serde",
+ "serde_json",
+ "toml",
+ "wayland-client",
+ "wayland-protocols",
+]
+
+[[package]]
+name = "nixe-tasks"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2309,7 +2339,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-torrents"
+name = "nixe-theme"
+version = "0.1.0"
+dependencies = [
+ "gtk4",
+ "nixe-core",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "nixe-torrents"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2324,30 +2364,6 @@ dependencies = [
  "pkg-config",
  "serde",
  "serde_json",
- "toml",
-]
-
-[[package]]
-name = "nixe-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "gtk4",
- "serde",
- "toml",
-]
-
-[[package]]
-name = "nixe-icons"
-version = "0.1.0"
-
-[[package]]
-name = "nixe-theme"
-version = "0.1.0"
-dependencies = [
- "gtk4",
- "nixe-core",
- "serde",
  "toml",
 ]
 
@@ -3243,22 +3259,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "170fb83ab34de17dc69aa7c67482b22218ddb85da56546f9bd6b929e32a05930"
 dependencies = [
  "stable_deref_trait",
-]
-
-[[package]]
-name = "settings"
-version = "0.7.1"
-dependencies = [
- "anyhow",
- "gtk4",
- "nixe-core",
- "nixe-theme",
- "nixe-ui",
- "serde",
- "serde_json",
- "toml",
- "wayland-client",
- "wayland-protocols",
 ]
 
 [[package]]

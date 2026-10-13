@@ -159,7 +159,7 @@ async fn start_one(cfg: &McpServer) -> Result<Arc<Server>> {
         json!({
             "protocolVersion": "2025-06-18",
             "capabilities": {},
-            "clientInfo": { "name": "nexus-chat", "version": env!("CARGO_PKG_VERSION") },
+            "clientInfo": { "name": "nixe-chat", "version": env!("CARGO_PKG_VERSION") },
         }),
     )
     .await?;
@@ -230,7 +230,7 @@ mod tests {
               *tools/call*) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"pong\"}]}}" ;;
             esac
           done"#;
-        let dir = std::env::temp_dir().join(format!("nexus-mcp-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nixe-mcp-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("server.sh");
         std::fs::write(&path, script).unwrap();

@@ -56,7 +56,7 @@ thread_local! {
 }
 
 fn open() -> Result<Connection> {
-    let path = std::env::var_os("NEXUS_CHAT_DB").map(std::path::PathBuf::from).unwrap_or_else(paths::database);
+    let path = std::env::var_os("NIXE_CHAT_DB").map(std::path::PathBuf::from).unwrap_or_else(paths::database);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }

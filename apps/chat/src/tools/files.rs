@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn only_allowed_folders() {
-        let dir = std::env::temp_dir().join(format!("nexus-chat-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nixe-chat-test-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("ok")).unwrap();
         std::fs::write(dir.join("ok/a.txt"), "hello").unwrap();
         std::fs::write(dir.join("secret.txt"), "no").unwrap();

@@ -148,7 +148,7 @@ fn install_icons() {
         ("chat-store-symbolic.svg", include_str!("../data/icons/chat-store-symbolic.svg")),
         ("chat-stats-symbolic.svg", include_str!("../data/icons/chat-stats-symbolic.svg")),
         ("chat-branch-symbolic.svg", include_str!("../data/icons/chat-branch-symbolic.svg")),
-        ("io.github.design_nexus.Chat.svg", include_str!("../data/io.github.design_nexus.Chat.svg")),
+        ("io.github.design_nexus.nixe.Chat.svg", include_str!("../data/io.github.design_nexus.nixe.Chat.svg")),
     ];
     let dir = crate::paths::cache_dir().join("icons");
     for (name, svg) in ICONS {
@@ -206,7 +206,7 @@ fn build(app: &gtk::Application) {
     window.add_css_class("chat-window");
     // No client-side titlebar: Hyprland manages the window.
     window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
-    window.set_icon_name(Some("io.github.design_nexus.Chat"));
+    window.set_icon_name(Some("io.github.design_nexus.nixe.Chat"));
 
     let sections = sections::all();
     let (top, crumb, search) = top_bar(&window);

@@ -57,7 +57,7 @@ pub async fn lookup(prefs: &Prefs) -> Result<Location> {
 fn client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
-        .user_agent(concat!("nexus-chat/", env!("CARGO_PKG_VERSION"), " (desktop Ollama client)"))
+        .user_agent(concat!("nixe-chat/", env!("CARGO_PKG_VERSION"), " (desktop Ollama client)"))
         .build()
         .unwrap_or_default()
 }
@@ -108,7 +108,7 @@ async fn geoclue_coordinates() -> zbus::Result<(f64, f64)> {
     let manager = proxy("/org/freedesktop/GeoClue2/Manager".into(), "org.freedesktop.GeoClue2.Manager").await?;
     let client_path: OwnedObjectPath = manager.call_method("GetClient", &()).await?.body().deserialize()?;
     let client = proxy(client_path.to_string(), "org.freedesktop.GeoClue2.Client").await?;
-    client.set_property("DesktopId", "io.github.design_nexus.Chat").await.map_err(zbus::Error::from)?;
+    client.set_property("DesktopId", "io.github.design_nexus.nixe.Chat").await.map_err(zbus::Error::from)?;
     // 4 = city level: enough for weather and local answers.
     client.set_property("RequestedAccuracyLevel", 4u32).await.map_err(zbus::Error::from)?;
     client.call_method("Start", &()).await?;

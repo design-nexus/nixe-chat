@@ -1,14 +1,14 @@
 [package]
-name = "nexus-chat"
+name = "nixe-chat"
 version = "0.1.0"
 description = "A desktop chat client for Ollama with tools, web search, and a Hugging Face model marketplace"
 license = "MIT"
-repository = "https://github.com/design-nexus/nexus-chat"
+repository = "https://github.com/design-nexus/nixe"
 authors = ["Ken Smith"]
 edition = "2024"
 
 [[bin]]
-name = "chat"
+name = "nixe-chat"
 path = "src/main.rs"
 
 [dependencies]

@@ -114,7 +114,7 @@ fn client() -> reqwest::Client {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(8))
         .timeout(Duration::from_secs(30))
-        .user_agent(concat!("nexus-chat/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("nixe-chat/", env!("CARGO_PKG_VERSION")))
         .build()
         .unwrap_or_default()
 }

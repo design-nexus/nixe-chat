@@ -31,7 +31,7 @@ mod window;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
-const APP_ID: &str = "io.github.design_nexus.Chat";
+const APP_ID: &str = "io.github.design_nexus.nixe.Chat";
 
 const USAGE: &str = "Usage: chat [OPTION…]\n\
 \n\
@@ -45,7 +45,8 @@ const USAGE: &str = "Usage: chat [OPTION…]\n\
   --version        print the version\n";
 
 fn main() -> glib::ExitCode {
-    nixe_core::app::init(nixe_core::app::App { slug: "nexus-chat", name: "Chat" });
+    nixe_core::app::init(nixe_core::app::App { slug: "nixe-chat", name: "Chat" });
+    nixe_core::migrate::from(&["nexus-chat"]);
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         print!("{USAGE}");

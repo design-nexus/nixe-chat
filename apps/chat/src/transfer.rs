@@ -56,7 +56,7 @@ pub fn chat_json(chat_id: i64) -> Result<Value> {
 }
 
 pub fn export_one(chat_id: i64) -> Result<String> {
-    Ok(serde_json::to_string_pretty(&json!({ "app": "nexus-chat", "version": 1, "chats": [chat_json(chat_id)?] }))?)
+    Ok(serde_json::to_string_pretty(&json!({ "app": "nixe-chat", "version": 1, "chats": [chat_json(chat_id)?] }))?)
 }
 
 pub fn export_all() -> Result<String> {
@@ -68,7 +68,7 @@ pub fn export_all() -> Result<String> {
             chats.push(v);
         }
     }
-    Ok(serde_json::to_string_pretty(&json!({ "app": "nexus-chat", "version": 1, "chats": chats }))?)
+    Ok(serde_json::to_string_pretty(&json!({ "app": "nixe-chat", "version": 1, "chats": chats }))?)
 }
 
 /// A chat in a neutral shape, ready to be written.
@@ -87,7 +87,8 @@ struct Imported {
 /// Import a file. Returns how many chats were added.
 pub fn import(text: &str) -> Result<usize> {
     let v: Value = serde_json::from_str(text).context("that file isn't JSON")?;
-    let chats = if v["app"] == "nexus-chat" {
+    // Exports from before the suite was called Nixe say "nexus-chat".
+    let chats = if v["app"] == "nixe-chat" || v["app"] == "nexus-chat" {
         parse_ours(&v)
     } else if let Some(list) = v.as_array() {
         list.iter().filter_map(parse_open_webui).collect()
