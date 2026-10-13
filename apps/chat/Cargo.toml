@@ -12,6 +12,8 @@ name = "chat"
 path = "src/main.rs"
 
 [dependencies]
+nixe-core = { path = "../../crates/nixe-core" }
+nixe-theme = { path = "../../crates/nixe-theme" }
 anyhow = "1"
 async-channel = "2"
 base64 = "0.22"

@@ -45,6 +45,7 @@ const USAGE: &str = "Usage: chat [OPTION…]\n\
   --version        print the version\n";
 
 fn main() -> glib::ExitCode {
+    nixe_core::app::init(nixe_core::app::App { slug: "nexus-chat", name: "Chat" });
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         print!("{USAGE}");
@@ -102,5 +103,6 @@ fn main() -> glib::ExitCode {
         }
         glib::ExitCode::SUCCESS
     });
+    app.connect_shutdown(|_| prefs::flush());
     app.run()
 }
