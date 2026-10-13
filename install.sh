@@ -119,8 +119,13 @@ desk="$share/applications"
 icons="$share/icons/hicolor/scalable/apps"
 mkdir -p "$bin" "$desk" "$icons"
 
-# A program of ours from before the rename: one that names the old app ids.
-ours() { [[ -f $1 ]] && grep -aqE 'design_nexus|nexus\.photos|nexus-office' "$1"; }
+# A program of ours from before the rename: one that names the old app ids
+# (Settings' account helper names none, but has its own commands).
+ours() {
+  [[ -f $1 ]] || return 1
+  grep -aqE 'design_nexus|nexus\.photos|nexus-office' "$1" && return 0
+  [[ $(basename "$1") == settings-helper ]] && grep -aq 'add-user' "$1"
+}
 
 mimeapps="$config/mimeapps.list"
 for a in "${apps[@]}"; do
