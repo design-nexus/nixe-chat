@@ -8,6 +8,22 @@ use crate::prefs;
 pub fn install() {
     nixe_theme::on_change(|| crate::hub::THEME.with(|h| h.emit()));
     nixe_theme::install(Style {
+        window_class: "chat-window",
+        base_skip: &[
+            "window.@APP@ popover > contents",
+            "window.@APP@ popover listview > row, window.@APP@ popover list > row",
+            "window.@APP@ scale > trough > slider, window.@APP@ scale.marks-before > trough > slider, window.@APP@ scale.marks-after > trough > slider",
+            ".theme-card",
+            ".theme-card.selected",
+            ".theme-card picture",
+            ".banner",
+            ".toast",
+            ".dialog-card",
+            ".key-cap",
+            "window.@APP@ .segmented button.segment",
+            ".settings-navigation.compact .nav-group",
+            ".settings-dialog",
+        ],
         css: include_str!("style.css"),
         no_glow_css: "",
         extra_colors: None,
