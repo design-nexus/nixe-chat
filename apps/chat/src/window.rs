@@ -205,6 +205,7 @@ fn build(app: &gtk::Application) {
     window.add_css_class("chat-window");
     // No client-side titlebar: Hyprland manages the window.
     window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
+    nixe_ui::keys::install(&window, nixe_ui::keys::Common::default());
     window.set_icon_name(Some("io.github.design_nexus.nixe.Chat"));
 
     let sections = sections::all();
