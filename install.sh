@@ -39,6 +39,7 @@ app_info() {
       deps="gtksourceview5 libspelling hunspell hunspell-en_us"
       old_bins="nexus-office nexus-write nexus-sheets nexus-present"
       old_desktops="nexus-write.desktop nexus-sheets.desktop nexus-present.desktop" ;;
+    assistant) dir=assistant pkg="" bins="nixe-assistant nixe-assistantd" ids="" deps="nodejs npm jq ripgrep" ;;
     photos)
       dir=gallery bins="nixe-photos nixe-viewer" ids="Photos PhotoViewer" defaults=true
       old_bins="nexus-photos npv nexus-photos-viewer" old_desktops="nexus-photos.desktop npv.desktop"
@@ -93,6 +94,23 @@ release_tag() {
   curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=100" 2>/dev/null |
     grep -o "\"tag_name\": *\"$1-v[^\"]*\"" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'
 }
+
+# The assistant builds and installs itself (CUDA, its own services and binds).
+if [[ " ${apps[*]} " == *" assistant "* ]]; then
+  mapfile -t apps < <(printf '%s\n' "${apps[@]}" | grep -vx assistant || true)
+  if [[ -n $here && -x $here/apps/assistant/scripts/install.sh ]]; then
+    asrc="$here/apps/assistant"
+  else
+    say "Fetching the assistant"
+    git clone -q --depth 1 --filter=blob:none --sparse "https://github.com/$REPO.git" "$work/assistant"
+    git -C "$work/assistant" sparse-checkout set apps/assistant
+    asrc="$work/assistant/apps/assistant"
+  fi
+  command -v cargo >/dev/null || die "Rust (cargo) is needed to build the assistant."
+  say "Building and installing the assistant (it takes a while the first time)"
+  "$asrc/scripts/install.sh"
+  ((${#apps[@]})) || exit 0
+fi
 
 prebuilt=false
 if [[ -n $here && -f $here/.prebuilt ]]; then
