@@ -223,13 +223,6 @@ pub fn icon_button(icon: &str, tooltip: &str) -> gtk::Button {
     b
 }
 
-/// A 30 px icon button for the top bar.
-pub fn bar_button(icon: &str, tooltip: &str) -> gtk::Button {
-    let b = icon_button(icon, tooltip);
-    b.add_css_class("bar-button");
-    b
-}
-
 /// A one-line label for text that can be long (model names, titles, paths):
 /// it shortens with an ellipsis instead of widening the page, and shows the
 /// whole text on hover.

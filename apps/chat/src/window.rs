@@ -2,6 +2,7 @@
 //! stack of pages built the first time they're shown, and a status bar.
 
 use gtk::prelude::*;
+use nixe_ui::chrome;
 use gtk::{gdk, glib};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -21,8 +22,6 @@ struct Ui {
     /// Pages visited before this one, for Alt+←.
     history: Vec<&'static str>,
     overlay: gtk::Overlay,
-    /// The page name in the top bar.
-    crumb: gtk::Label,
     search: gtk::SearchEntry,
     /// The page's description in the status bar (or the chat's live readout).
     status_note: gtk::Label,
@@ -209,7 +208,7 @@ fn build(app: &gtk::Application) {
     window.set_icon_name(Some("io.github.design_nexus.nixe.Chat"));
 
     let sections = sections::all();
-    let (top, crumb, search) = top_bar(&window);
+    let search = search_entry();
 
     // ----- Sidebar -----
     let nav = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -240,7 +239,7 @@ fn build(app: &gtk::Application) {
         list.append(&button);
         nav_items.insert(s.id, button);
     }
-    // The chats follow the pages, driven by the search in the top bar.
+    // The chats follow the pages, driven by the search at the top of the sidebar.
     let chats = chatlist::build(&search, false);
     chats.add_css_class("compact-hide");
     list.append(&chats);
@@ -251,6 +250,14 @@ fn build(app: &gtk::Application) {
         .vexpand(true)
         .child(&list)
         .build();
+    let head = chrome::sidebar_head("Chat", Some("Search chats (Ctrl+F)"));
+    head.toggle.connect_clicked(|_| toggle_sidebar());
+    if let Some(find) = &head.search {
+        find.connect_clicked(|_| open_search());
+    }
+    nav.append(&head.root);
+    search.add_css_class("sidebar-search");
+    nav.append(&search);
     nav.append(&nav_scroll);
 
     // ----- Content -----
@@ -269,7 +276,6 @@ fn build(app: &gtk::Application) {
     let (status, status_note) = status_bar();
     let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
     frame.add_css_class("window-frame");
-    frame.append(&top);
     frame.append(&body);
     frame.append(&status);
 
@@ -317,50 +323,32 @@ fn build(app: &gtk::Application) {
         current: "",
         history: Vec::new(),
         overlay,
-        crumb,
         search,
         status_note,
     };
     UI.with(|u| *u.borrow_mut() = Some(Rc::new(RefCell::new(ui))));
 }
 
-/// The bar across the top: the sidebar toggle and where you are on the left;
-/// search, settings and close on the right.
-fn top_bar(window: &gtk::ApplicationWindow) -> (gtk::Box, gtk::Label, gtk::SearchEntry) {
-    let bar = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-    bar.add_css_class("top-bar");
-    let toggle = widgets::bar_button("sidebar-show-symbolic", "Collapse or expand the sidebar (Ctrl+B)");
-    toggle.connect_clicked(|_| toggle_sidebar());
-    bar.append(&toggle);
-
-    let crumbs = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-    crumbs.add_css_class("crumbs");
-    crumbs.append(&widgets::label("Chat", "crumb-root"));
-    crumbs.append(&widgets::label("/", "crumb-sep"));
-    let crumb = widgets::label("", "crumb");
-    crumb.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    crumbs.append(&crumb);
-    crumbs.set_hexpand(true);
-    bar.append(&crumbs);
-
+/// The chat search, at the top of the sidebar: hidden until Ctrl+F or the
+/// sidebar's search button.
+fn search_entry() -> gtk::SearchEntry {
     let search = gtk::SearchEntry::new();
     search.set_placeholder_text(Some("Search chats"));
-    search.add_css_class("bar-search");
-    search.set_width_chars(22);
     search.set_visible(false);
-    bar.append(&search);
-    let find = widgets::bar_button("system-search-symbolic", "Search chats (Ctrl+F)");
-    find.connect_clicked(|_| open_search());
-    bar.append(&find);
     search.connect_stop_search(|e| {
         e.set_text("");
         e.set_visible(false);
     });
+    search
+}
 
+/// Temporary chat: not saved. Its toggle sits in the status bar.
+fn temp_toggle() -> gtk::ToggleButton {
     let temp = gtk::ToggleButton::new();
     temp.set_icon_name("view-conceal-symbolic");
     temp.add_css_class("flat");
     temp.add_css_class("bar-button");
+    temp.add_css_class("status-action");
     temp.add_css_class("temp-toggle");
     temp.set_valign(gtk::Align::Center);
     temp.set_tooltip_text(Some("Temporary chat: not saved (Ctrl+Shift+N)"));
@@ -369,17 +357,8 @@ fn top_bar(window: &gtk::ApplicationWindow) -> (gtk::Box, gtk::Label, gtk::Searc
             sections::chat::set_temporary(b.is_active());
         }
     });
-    bar.append(&temp);
-    TEMP_TOGGLE.with(|t| *t.borrow_mut() = Some(temp));
-
-    let gear = widgets::bar_button("emblem-system-symbolic", "Settings (Ctrl+,)");
-    gear.connect_clicked(|_| settings_dialog::open());
-    bar.append(&gear);
-    let close = widgets::bar_button("window-close-symbolic", "Close (Ctrl+Q)");
-    let w = window.clone();
-    close.connect_clicked(move |_| w.close());
-    bar.append(&close);
-    (bar, crumb, search)
+    TEMP_TOGGLE.with(|t| *t.borrow_mut() = Some(temp.clone()));
+    temp
 }
 
 thread_local! {
@@ -523,6 +502,8 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
     let r = refresh.clone();
     hub::on(&hub::PULLS, &dot, r);
     hub::on(&hub::HOST, &bar, refresh);
+    bar.append(&temp_toggle());
+    bar.append(&chrome::gear(settings_dialog::open));
     (bar, note)
 }
 
@@ -681,6 +662,13 @@ pub fn switch_host(i: usize) {
 /// The sidebar shows only icons: hide everything marked `compact-hide` and
 /// centre the icons.
 fn apply_compact(nav: &gtk::Box, compact: bool) {
+    if let Some(head) = nav.first_child().and_downcast::<gtk::Box>() {
+        chrome::set_head_compact(&head, compact);
+        // The icon-only sidebar has no room for the search; Ctrl+F opens the history instead.
+        if compact && let Some(search) = head.next_sibling().and_downcast::<gtk::SearchEntry>() {
+            search.set_visible(false);
+        }
+    }
     if compact {
         nav.add_css_class("compact");
     } else {
@@ -826,7 +814,7 @@ fn go(id: &str, record: bool) {
     refresh_note();
 }
 
-/// The top bar's page name: the open chat's title on the chat page.
+/// The window title: the open chat's title on the chat page, else the page's name.
 pub fn refresh_crumb() {
     let Some(ui) = ui() else { return };
     let u = ui.borrow();
@@ -835,8 +823,7 @@ pub fn refresh_crumb() {
     } else {
         u.sections.iter().find(|s| s.id == u.current).map(|s| s.title.to_string()).unwrap_or_default()
     };
-    u.crumb.set_text(&title);
-    u.crumb.set_tooltip_text(Some(&title));
+    chrome::set_title(&u.window, "Chat", &title);
 }
 
 /// The status bar's middle: the chat's live readout on the chat page, the
