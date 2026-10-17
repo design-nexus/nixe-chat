@@ -3,6 +3,7 @@
 mod chatlist;
 mod clamp;
 mod cmd;
+mod control;
 mod hf;
 mod highlight;
 mod hub;
@@ -65,6 +66,8 @@ fn main() -> glib::ExitCode {
     }
 
     let app = gtk::Application::builder().application_id(APP_ID).flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE).build();
+    // Nixe Assistant reads and sends chats through this (primary instance only).
+    app.connect_startup(|app| nixe_core::control::serve(app, control::tools(), control::handle));
     app.connect_command_line(|app, cl| {
         let argv: Vec<String> = cl.arguments().iter().map(|a| a.to_string_lossy().to_string()).collect();
         let has = |f: &str| argv.iter().any(|a| a == f);

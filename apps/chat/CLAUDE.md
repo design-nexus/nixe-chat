@@ -30,6 +30,7 @@
   whose source changed, so streaming stays cheap.
 - Don't wake the dGPU: `GSK_RENDERER=ngl` in `main.rs`; `hw.rs` only calls `nvidia-smi`
   while `runtime_status` isn't `suspended`, and caches VRAM in prefs.
+- Control (`src/control.rs`): `nixe_core::control` on the app's bus name, for Nixe Assistant: `chat.list`, `search`, `read`, `open`, `send` (`sections::chat::send_text`).
 - Checks: `cargo clippy -- -D warnings`, `cargo test` (network tests: `cargo test -- --ignored`
   with `OLLAMA_URL` pointing at a server that has `all-minilm`).
 - Visual check (quit any running instance first; it's single-instance), ideally with scratch
