@@ -12,9 +12,9 @@ name = "nixe-chat"
 path = "src/main.rs"
 
 [dependencies]
-nixe-core = { git = "https://github.com/design-nexus/nixe-core.git", rev = "e4595e68a4fd9b44bd15e95311ace1d0fb669bc4" }
-nixe-ui = { git = "https://github.com/design-nexus/nixe-design.git", rev = "0319940fb27bb5fc7f04742bcb2bd331b384c425" }
-nixe-theme = { git = "https://github.com/design-nexus/nixe-design.git", rev = "0319940fb27bb5fc7f04742bcb2bd331b384c425" }
+nixe-core = { git = "https://github.com/design-nexus/nixe-core.git", rev = "7cd0be5d09cd1d91510794f58bbc720605951c12" }
+nixe-ui = { git = "https://github.com/design-nexus/nixe-design.git", rev = "609c1d2a5af41a8ee3b76ba23611eb30d95a4743" }
+nixe-theme = { git = "https://github.com/design-nexus/nixe-design.git", rev = "609c1d2a5af41a8ee3b76ba23611eb30d95a4743" }
 anyhow = "1"
 async-channel = "2"
 base64 = "0.22"
