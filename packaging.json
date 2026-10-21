@@ -1,0 +1,10 @@
+{
+  "application": "chat",
+  "directory": "chat",
+  "packages": [
+    "nixe-chat"
+  ],
+  "manifest": "Cargo.toml",
+  "prepare": [],
+  "binaries": []
+}
