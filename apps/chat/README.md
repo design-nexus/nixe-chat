@@ -99,7 +99,7 @@ while the GPU is already awake.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/design-nexus/nixe/main/install.sh | bash -s -- chat
+curl -fsSL https://raw.githubusercontent.com/design-nexus/nixe-chat/main/install.sh | bash -s -- chat
 ```
 
 This builds with Cargo and installs `nixe-chat` to `~/.local/bin`, along with a launcher
