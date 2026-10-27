@@ -1,13 +1,13 @@
 # Chat — notes for working on this repo
 
 - GTK4 (gtk4-rs 0.11) + Rust, no libadwaita. Follows `STYLE.md`; the theme, widgets, settings
-  card and window frame come from the `nixe-*` crates.
+  card and window frame come from the `nyx-*` crates.
   Every color is a `@theme_*` token or one of the derived mixes at the top of `style.css`
   (`@hairline`, `@nav_active`, …); Pango markup that bakes colors (code highlighting, inline
   code) is rebuilt on `hub::THEME`. The sidebar's head holds its toggle and search; the chat search
   sits under it and filters the chat list. The status bar ends with the temporary-chat
   toggle and settings.
-- Settings is a card over the window (`nixe_ui::settings_card`, set up in `settings_dialog.rs`), not a page:
+- Settings is a card over the window (`nyx_ui::settings_card`, set up in `settings_dialog.rs`), not a page:
   `sections/settings.rs::build` fills one page with every group and the card shows one group
   at a time; `navigate("settings")` opens it. Groups are matched by name in its `GROUPS`.
 - Pages have no title: the window title names the page (the chat's title on the chat page)
@@ -30,7 +30,7 @@
   whose source changed, so streaming stays cheap.
 - Don't wake the dGPU: `GSK_RENDERER=ngl` in `main.rs`; `hw.rs` only calls `nvidia-smi`
   while `runtime_status` isn't `suspended`, and caches VRAM in prefs.
-- Control (`src/control.rs`): `nixe_core::control` on the app's bus name, for Nixe Assistant: `chat.list`, `search`, `read`, `open`, `send` (`sections::chat::send_text`).
+- Control (`src/control.rs`): `nyx_core::control` on the app's bus name, for Nyx Assistant: `chat.list`, `search`, `read`, `open`, `send` (`sections::chat::send_text`).
 - Checks: `cargo clippy -- -D warnings`, `cargo test` (network tests: `cargo test -- --ignored`
   with `OLLAMA_URL` pointing at a server that has `all-minilm`).
 - Visual check (quit any running instance first; it's single-instance), ideally with scratch
@@ -38,7 +38,7 @@
   `CHAT_SNAPSHOT=/tmp/x.png [CHAT_SNAPSHOT_W=… CHAT_SNAPSHOT_H=… CHAT_SNAPSHOT_DELAY=ms] chat --section models`.
   Extra hooks for whole flows: `CHAT_SNAPSHOT_SEND="question"`, `CHAT_SNAPSHOT_COMPARE=model`,
   `CHAT_SNAPSHOT_REPO=user/repo`, `CHAT_SNAPSHOT_PULL=name`, `CHAT_SNAPSHOT_ARENA="prompt"`;
-  `nixe-chat --quick` also honors `CHAT_SNAPSHOT` and `CHAT_SNAPSHOT_SEND`.
+  `nyx-chat --quick` also honors `CHAT_SNAPSHOT` and `CHAT_SNAPSHOT_SEND`.
 - Layout checks: `CHAT_DEBUG_WIDTH=736` (with `CHAT_SNAPSHOT`) prints the innermost widgets
   whose minimum width is over that, i.e. what makes a page wider than an 800 px window.
   Long one-line text (model names, titles, paths) goes through `widgets::short_label`;

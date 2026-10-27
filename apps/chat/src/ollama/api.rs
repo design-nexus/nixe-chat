@@ -48,7 +48,7 @@ pub fn client() -> reqwest::Client {
     C.get_or_init(|| {
         reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))
-            .user_agent(concat!("nixe-chat/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("nyx-chat/", env!("CARGO_PKG_VERSION")))
             .build()
             .unwrap_or_default()
     })

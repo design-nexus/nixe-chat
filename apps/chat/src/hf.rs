@@ -127,7 +127,7 @@ fn client() -> reqwest::Client {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(8))
         .timeout(Duration::from_secs(30))
-        .user_agent(concat!("nixe-chat/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("nyx-chat/", env!("CARGO_PKG_VERSION")))
         .build()
         .unwrap_or_default()
 }
@@ -135,7 +135,7 @@ fn client() -> reqwest::Client {
 fn token_path() -> PathBuf {
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
     std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".config"))
-        .join("nixe-chat/huggingface.token")
+        .join("nyx-chat/huggingface.token")
 }
 
 fn shared_token_path() -> PathBuf {

@@ -33,9 +33,9 @@ mod window;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
-const APP_ID: &str = "io.github.design_nexus.nixe.Chat";
+const APP_ID: &str = "io.github.design_nexus.nyx.Chat";
 
-const USAGE: &str = "Usage: nixe-chat [OPTION…]\n\
+const USAGE: &str = "Usage: nyx-chat [OPTION…]\n\
 \n\
   --section ID     open a page: chat, models, marketplace, arena, knowledge, prompts, stats, settings\n\
   --new            start a new chat\n\
@@ -47,8 +47,8 @@ const USAGE: &str = "Usage: nixe-chat [OPTION…]\n\
   --version        print the version\n";
 
 fn main() -> glib::ExitCode {
-    nixe_core::app::init(nixe_core::app::App { slug: "nixe-chat", name: "Chat" });
-    nixe_core::migrate::from(&["nexus-chat"]);
+    nyx_core::app::init(nyx_core::app::App { slug: "nyx-chat", name: "Chat" });
+    nyx_core::migrate::from(&["nexus-chat"]);
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         print!("{USAGE}");
@@ -67,8 +67,8 @@ fn main() -> glib::ExitCode {
     }
 
     let app = gtk::Application::builder().application_id(APP_ID).flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE).build();
-    // Nixe Assistant reads and sends chats through this (primary instance only).
-    app.connect_startup(|app| nixe_core::control::serve(app, control::tools(), control::handle));
+    // Nyx Assistant reads and sends chats through this (primary instance only).
+    app.connect_startup(|app| nyx_core::control::serve(app, control::tools(), control::handle));
     app.connect_command_line(|app, cl| {
         let argv: Vec<String> = cl.arguments().iter().map(|a| a.to_string_lossy().to_string()).collect();
         let has = |f: &str| argv.iter().any(|a| a == f);

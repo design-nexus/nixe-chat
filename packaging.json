@@ -2,7 +2,7 @@
   "application": "chat",
   "directory": "chat",
   "packages": [
-    "nixe-chat"
+    "nyx-chat"
   ],
   "manifest": "Cargo.toml",
   "prepare": [],
@@ -13,9 +13,9 @@
       "test",
       "--locked",
       "-p",
-      "nixe-chat",
+      "nyx-chat",
       "--bin",
-      "nixe-chat"
+      "nyx-chat"
     ]
   ]
 }

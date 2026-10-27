@@ -1,20 +1,20 @@
 [package]
-name = "nixe-chat"
+name = "nyx-chat"
 version = "0.1.0"
 description = "A desktop chat client for llama.cpp and Ollama with tools and a GGUF marketplace"
 license = "MIT"
-repository = "https://github.com/design-nexus/nixe-chat"
+repository = "https://github.com/design-nexus/nyx-chat"
 authors = ["Ken Smith"]
 edition = "2024"
 
 [[bin]]
-name = "nixe-chat"
+name = "nyx-chat"
 path = "src/main.rs"
 
 [dependencies]
-nixe-core = { git = "https://github.com/design-nexus/nixe-core.git", rev = "87682e6c936b6a4f006639b1a1c099e96346c07c" }
-nixe-ui = { git = "https://github.com/design-nexus/nixe-design.git", rev = "b8204de80644e263e32783602f2e0ae393578c9e" }
-nixe-theme = { git = "https://github.com/design-nexus/nixe-design.git", rev = "b8204de80644e263e32783602f2e0ae393578c9e" }
+nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "52cba5e27a3dd5f00c780f53e423302b4b5f9c9c" }
+nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "938c638951a53f5874a8276d07ac9dcd68b191ad" }
+nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "938c638951a53f5874a8276d07ac9dcd68b191ad" }
 anyhow = "1"
 async-channel = "2"
 base64 = "0.22"

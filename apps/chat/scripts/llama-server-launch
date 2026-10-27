@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-libdir="$HOME/.local/lib/nixe-chat/llama.cpp"
-app_token="${XDG_CONFIG_HOME:-$HOME/.config}/nixe-chat/huggingface.token"
+libdir="$HOME/.local/lib/nyx-chat/llama.cpp"
+app_token="${XDG_CONFIG_HOME:-$HOME/.config}/nyx-chat/huggingface.token"
 shared_token="${HF_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/huggingface}/token"
 if [[ -s $app_token ]]; then
   HF_TOKEN=$(<"$app_token")
@@ -14,7 +14,7 @@ fi
 
 models_max=1
 idle=-1
-settings="${XDG_CONFIG_HOME:-$HOME/.config}/nixe-chat/settings.toml"
+settings="${XDG_CONFIG_HOME:-$HOME/.config}/nyx-chat/settings.toml"
 if [[ -r $settings ]]; then
   while IFS= read -r line; do
     if [[ $line =~ ^llama_models_max[[:space:]]*=[[:space:]]*([124]) ]]; then

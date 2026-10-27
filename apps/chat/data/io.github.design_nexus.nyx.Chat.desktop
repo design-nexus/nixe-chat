@@ -3,27 +3,27 @@ Type=Application
 Name=Chat
 GenericName=AI Chat
 Comment=Chat with local models through Ollama, with tools, web search and a model marketplace
-Exec=nixe-chat
-Icon=io.github.design_nexus.nixe.Chat
+Exec=nyx-chat
+Icon=io.github.design_nexus.nyx.Chat
 Terminal=false
 StartupNotify=true
-StartupWMClass=io.github.design_nexus.nixe.Chat
+StartupWMClass=io.github.design_nexus.nyx.Chat
 Categories=Utility;Development;GTK;
 Keywords=ollama;llm;ai;chat;model;assistant;huggingface;gguf;local;
 Actions=new;quick;models;marketplace;
 
 [Desktop Action new]
 Name=New Chat
-Exec=nixe-chat --new
+Exec=nyx-chat --new
 
 [Desktop Action quick]
 Name=Quick Ask
-Exec=nixe-chat --quick
+Exec=nyx-chat --quick
 
 [Desktop Action models]
 Name=Models
-Exec=nixe-chat --section models
+Exec=nyx-chat --section models
 
 [Desktop Action marketplace]
 Name=Marketplace
-Exec=nixe-chat --section marketplace
+Exec=nyx-chat --section marketplace

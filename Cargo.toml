@@ -6,7 +6,7 @@ members = ["apps/chat"]
 edition = "2024"
 license = "MIT"
 authors = ["Ken Smith"]
-repository = "https://github.com/design-nexus/nixe-chat"
+repository = "https://github.com/design-nexus/nyx-chat"
 
 [profile.release]
 lto = "thin"

@@ -1,10 +1,10 @@
-//! Chat's tools on the control interface (`nixe_core::control`), for Nixe Assistant: find and
+//! Chat's tools on the control interface (`nyx_core::control`), for Nyx Assistant: find and
 //! read conversations, open one, and send a message (the model's answer is read back with
 //! `chat.read` once it has finished). Nothing deletes or archives.
 
 use crate::sections::chat;
 use crate::store;
-use nixe_core::control::text;
+use nyx_core::control::text;
 use serde_json::{json, Value};
 
 pub fn tools() -> Value {

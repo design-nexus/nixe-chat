@@ -234,7 +234,7 @@ fn this_window(page: &Page) {
     let options: Vec<(String, String)> = theme::all().iter().map(|t| (t.id.clone(), t.name.clone())).collect();
     let (theme_row, theme_dd) = widgets::choice_row(
         "Theme",
-        "Dracula, Catppuccin, Tokyo Night and more. Add your own in <tt>~/.config/nixe-chat/themes</tt>.",
+        "Dracula, Catppuccin, Tokyo Night and more. Add your own in <tt>~/.config/nyx-chat/themes</tt>.",
         options,
         &p.theme,
         |id| {

@@ -2,7 +2,7 @@
 //! stack of pages built the first time they're shown, and a status bar.
 
 use gtk::prelude::*;
-use nixe_ui::chrome;
+use nyx_ui::chrome;
 use gtk::{gdk, glib};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -147,7 +147,7 @@ fn install_icons() {
         ("chat-store-symbolic.svg", include_str!("../data/icons/chat-store-symbolic.svg")),
         ("chat-stats-symbolic.svg", include_str!("../data/icons/chat-stats-symbolic.svg")),
         ("chat-branch-symbolic.svg", include_str!("../data/icons/chat-branch-symbolic.svg")),
-        ("io.github.design_nexus.nixe.Chat.svg", include_str!("../../../crates/nixe-icons/apps/io.github.design_nexus.nixe.Chat.svg")),
+        ("io.github.design_nexus.nyx.Chat.svg", include_str!("../../../crates/nyx-icons/apps/io.github.design_nexus.nyx.Chat.svg")),
     ];
     let dir = crate::paths::cache_dir().join("icons");
     for (name, svg) in ICONS {
@@ -205,8 +205,8 @@ fn build(app: &gtk::Application) {
     window.add_css_class("chat-window");
     // No client-side titlebar: Hyprland manages the window.
     window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
-    nixe_ui::keys::install(&window, nixe_ui::keys::Common::default());
-    window.set_icon_name(Some("io.github.design_nexus.nixe.Chat"));
+    nyx_ui::keys::install(&window, nyx_ui::keys::Common::default());
+    window.set_icon_name(Some("io.github.design_nexus.nyx.Chat"));
 
     let sections = sections::all();
     let search = search_entry();
@@ -868,7 +868,7 @@ pub fn toast_action(message: &str, action: &str, f: impl Fn() + 'static) {
 
 fn show_toast(message: &str, action: ToastAction<'_>) {
     let Some(ui) = ui() else {
-        eprintln!("nixe-chat: {message}");
+        eprintln!("nyx-chat: {message}");
         return;
     };
     let overlay = ui.borrow().overlay.clone();

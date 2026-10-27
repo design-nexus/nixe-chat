@@ -84,7 +84,7 @@ Chat talks to an Ollama server (on this computer by default). It doesn't run mod
 - **Voice:** dictate with [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
   (<kbd>Ctrl</kbd>+<kbd>Space</kbd>) and hear replies read aloud with
   [Piper](https://github.com/rhasspy/piper). Hands-free mode sends when you stop talking.
-- **Quick ask:** `nixe-chat --quick` opens a small window for one-off questions, optionally
+- **Quick ask:** `nyx-chat --quick` opens a small window for one-off questions, optionally
   about the text you've highlighted or copied. **Open in chat** keeps the exchange.
 - **Several servers:** add other computers running Ollama and switch between them from
   the status bar.
@@ -99,10 +99,10 @@ while the GPU is already awake.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/design-nexus/nixe-chat/main/install.sh | bash -s -- chat
+curl -fsSL https://raw.githubusercontent.com/design-nexus/nyx-chat/main/install.sh | bash -s -- chat
 ```
 
-This builds with Cargo and installs `nixe-chat` to `~/.local/bin`, along with a launcher
+This builds with Cargo and installs `nyx-chat` to `~/.local/bin`, along with a launcher
 entry. Add `-s -- --bind` after `bash` to also print lines that open Quick ask with
 Super+Alt+Space:
 
@@ -122,12 +122,12 @@ Optional: `wl-clipboard` (Quick ask with the selection), `grim` and `slurp`
 ## Usage
 
 ```
-nixe-chat [--section ID] [--new] [--quick [--selection | --clipboard]] [--screenshot] [--attach FILE…]
+nyx-chat [--section ID] [--new] [--quick [--selection | --clipboard]] [--screenshot] [--attach FILE…]
 ```
 
 | Option | What it does |
 | --- | --- |
-| `--section ID` | Opens `nixe-chat`, `models`, `marketplace`, `arena`, `knowledge`, `prompts`, `stats` or `settings` |
+| `--section ID` | Opens `nyx-chat`, `models`, `marketplace`, `arena`, `knowledge`, `prompts`, `stats` or `settings` |
 | `--new` | Starts a new chat |
 | `--quick` | Opens Quick ask; with `--selection` or `--clipboard`, asks about that text |
 | `--screenshot` | Drag out an area of the screen and attach it to a chat |
@@ -153,10 +153,10 @@ nixe-chat [--section ID] [--new] [--quick [--selection | --clipboard]] [--screen
 
 | Path | What |
 | --- | --- |
-| `~/.config/nixe-chat/settings.toml` | Preferences, servers and MCP servers |
-| `~/.config/nixe-chat/themes/*.toml` | Your own themes |
-| `~/.local/share/nixe-chat/chat.db` | Chats, prompts, memories, knowledge and arena votes (SQLite) |
-| `~/.local/share/nixe-chat/attachments/` | Attached images and the text of attached files |
+| `~/.config/nyx-chat/settings.toml` | Preferences, servers and MCP servers |
+| `~/.config/nyx-chat/themes/*.toml` | Your own themes |
+| `~/.local/share/nyx-chat/chat.db` | Chats, prompts, memories, knowledge and arena votes (SQLite) |
+| `~/.local/share/nyx-chat/attachments/` | Attached images and the text of attached files |
 
 ## License
 

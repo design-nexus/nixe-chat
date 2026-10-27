@@ -1,13 +1,13 @@
-//! Theming: the shared Nixe theme engine, given this app's stylesheet.
+//! Theming: the shared Nyx theme engine, given this app's stylesheet.
 
-pub use nixe_theme::*;
+pub use nyx_theme::*;
 
 use crate::prefs;
 
 /// Install the stylesheet and the current palette, and follow Omarchy live.
 pub fn install() {
-    nixe_theme::on_change(|| crate::hub::THEME.with(|h| h.emit()));
-    nixe_theme::install(Style {
+    nyx_theme::on_change(|| crate::hub::THEME.with(|h| h.emit()));
+    nyx_theme::install(Style {
         window_class: "chat-window",
         base_skip: &[
             "window.@APP@ popover > contents",

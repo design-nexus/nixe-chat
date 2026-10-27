@@ -99,7 +99,7 @@ pub fn parse_tags(html: &str, model: &str) -> Vec<Tag> {
 fn client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent(concat!("nixe-chat/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("nyx-chat/", env!("CARGO_PKG_VERSION")))
         .build()
         .unwrap_or_default()
 }

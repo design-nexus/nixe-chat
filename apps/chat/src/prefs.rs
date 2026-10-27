@@ -1,8 +1,8 @@
-//! This app's own preferences (`~/.config/nixe-chat/settings.toml`).
+//! This app's own preferences (`~/.config/nyx-chat/settings.toml`).
 //!
 //! The GTK thread owns the live copy. Background work gets a clone.
 
-pub use nixe_theme::ThemeMode;
+pub use nyx_theme::ThemeMode;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -247,7 +247,7 @@ pub fn for_model(name: &str) -> ModelSettings {
     get().model_settings.get(name).cloned().unwrap_or_default()
 }
 
-nixe_core::prefs_store!(Prefs, nixe_core::prefs::Store::standard_with(fix));
+nyx_core::prefs_store!(Prefs, nyx_core::prefs::Store::standard_with(fix));
 
 /// There is always at least one host to talk to.
 fn fix(p: &mut Prefs) -> bool {

@@ -180,7 +180,7 @@ pub async fn download(model: &str, tx: &async_channel::Sender<Progress>) -> Resu
     let total = files.iter().map(|f| f.size).sum();
     let base = cache_root().join(format!("models--{}", repo.replace('/', "--")));
     let client = reqwest::Client::builder().connect_timeout(Duration::from_secs(10))
-        .user_agent(concat!("nixe-chat/", env!("CARGO_PKG_VERSION"))).build()?;
+        .user_agent(concat!("nyx-chat/", env!("CARGO_PKG_VERSION"))).build()?;
     let mut completed = 0;
     for file in &files {
         download_file(&client, repo, &metadata.sha, file, &base, &mut completed, total, tx).await?;

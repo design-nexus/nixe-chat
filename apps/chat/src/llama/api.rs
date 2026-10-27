@@ -207,7 +207,7 @@ pub async fn pull(conn: &Conn, model: &str, tx: async_channel::Sender<Progress>)
 }
 
 pub fn service_state() -> String {
-    crate::cmd::output(&["systemctl", "--user", "is-active", "nixe-llama-server"]).unwrap_or_else(|| "inactive".into())
+    crate::cmd::output(&["systemctl", "--user", "is-active", "nyx-llama-server"]).unwrap_or_else(|| "inactive".into())
 }
 
 pub fn local_service() -> bool {
@@ -217,21 +217,21 @@ pub fn local_service() -> bool {
 }
 
 pub fn service_enabled() -> bool {
-    crate::cmd::output(&["systemctl", "--user", "is-enabled", "nixe-llama-server.service"])
+    crate::cmd::output(&["systemctl", "--user", "is-enabled", "nyx-llama-server.service"])
         .is_some_and(|s| s.trim() == "enabled")
 }
 
 pub fn set_service_enabled(enabled: bool) -> Result<()> {
-    crate::cmd::run(&["systemctl", "--user", if enabled { "enable" } else { "disable" }, "--now", "nixe-llama-server.service"]).map(|_| ())
+    crate::cmd::run(&["systemctl", "--user", if enabled { "enable" } else { "disable" }, "--now", "nyx-llama-server.service"]).map(|_| ())
 }
 
 pub fn installed() -> bool {
     crate::cmd::present("llama-server") || std::env::var_os("HOME")
-        .is_some_and(|home| std::path::PathBuf::from(home).join(".local/lib/nixe-chat/llama.cpp/llama-server").exists())
+        .is_some_and(|home| std::path::PathBuf::from(home).join(".local/lib/nyx-chat/llama.cpp/llama-server").exists())
 }
 
 pub fn control(action: &str) -> Result<String> {
     if !matches!(action, "start" | "stop" | "restart") { bail!("unknown service action {action}"); }
-    crate::cmd::run(&["systemctl", "--user", action, "nixe-llama-server"])?;
+    crate::cmd::run(&["systemctl", "--user", action, "nyx-llama-server"])?;
     Ok(format!("{} llama.cpp", if action == "start" { "Started" } else if action == "stop" { "Stopped" } else { "Restarted" }))
 }
