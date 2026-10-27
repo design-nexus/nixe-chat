@@ -49,6 +49,12 @@ for a in "${apps[@]}"; do
     rm -rf "$share/nixe-settings/extensions/glimpse" "$share/settings/extensions/glimpse"
     bins="nixe-glimpse nixe-glimpsed nixe-glimpse-settings"
   fi
+  if [[ $a == chat ]]; then
+    systemctl --user disable --now nixe-llama-server.service 2>/dev/null || true
+    rm -f "$config/systemd/user/nixe-llama-server.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+    rm -rf "$HOME/.local/lib/nixe-chat/llama.cpp"
+  fi
   if [[ $a == passwords ]]; then
     # Stopping the service locks the vault and clears a copy it left on the clipboard.
     systemctl --user stop nixe-passwords.service 2>/dev/null || true

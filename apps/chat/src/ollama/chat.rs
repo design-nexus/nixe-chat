@@ -233,6 +233,9 @@ async fn stream_once(
     tx: &async_channel::Sender<Event>,
     cancel: &Cancel,
 ) -> Result<(String, String, Vec<ToolCall>, Stats)> {
+    if req.conn.backend == crate::prefs::Backend::LlamaCpp {
+        return crate::llama::chat::stream_once(req, tx, cancel).await;
+    }
     let response = req.conn.post("/api/chat").json(&body(req)).send().await?;
     if !response.status().is_success() {
         let status = response.status();

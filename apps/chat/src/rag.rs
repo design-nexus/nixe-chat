@@ -133,7 +133,7 @@ mod network_tests {
     fn finds_the_relevant_chunk() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let conn = Conn { url: std::env::var("OLLAMA_URL").unwrap_or("http://127.0.0.1:11434".into()), key: String::new() };
+            let conn = Conn { url: std::env::var("OLLAMA_URL").unwrap_or("http://127.0.0.1:11434".into()), key: String::new(), backend: crate::prefs::Backend::Ollama };
             let chunks = vec![
                 "The office cat is called Biscuit and likes sunny windows.".to_string(),
                 "Quarterly revenue grew twelve percent on hardware sales.".to_string(),

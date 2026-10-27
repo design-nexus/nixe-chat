@@ -5,11 +5,54 @@
 pub use nixe_theme::ThemeMode;
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
-/// An Ollama server.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ModelSettings {
+    pub num_ctx: i64,
+    pub gpu_layers: String,
+    pub flash_attention: String,
+    pub kv_cache: String,
+    pub temperature: f64,
+    pub top_p: f64,
+    pub top_k: i64,
+    pub min_p: f64,
+    pub repeat_penalty: f64,
+}
+
+impl Default for ModelSettings {
+    fn default() -> Self {
+        Self { num_ctx: 8192, gpu_layers: "auto".into(), flash_attention: "auto".into(), kv_cache: "f16".into(),
+            temperature: 0.7, top_p: 0.9, top_k: 40, min_p: 0.05, repeat_penalty: 1.0 }
+    }
+}
+
+impl ModelSettings {
+    pub fn from_legacy(p: &Prefs) -> Self {
+        Self { num_ctx: p.num_ctx, gpu_layers: p.llama_gpu_layers.clone(), flash_attention: p.llama_flash_attention.clone(),
+            temperature: p.temperature, top_p: p.top_p, top_k: p.top_k, ..Self::default() }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Backend {
+    LlamaCpp,
+    #[default]
+    Ollama,
+}
+
+impl Backend {
+    pub fn as_str(self) -> &'static str { if self == Self::LlamaCpp { "llama_cpp" } else { "ollama" } }
+}
+
+/// A model server. Old entries without a backend are Ollama servers.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Host {
+    #[serde(default)]
+    pub backend: Backend,
     pub name: String,
     pub url: String,
     /// Sent as `Authorization: Bearer …` when set (for servers behind a proxy).
@@ -18,7 +61,7 @@ pub struct Host {
 
 impl Default for Host {
     fn default() -> Self {
-        Host { name: "This computer".into(), url: "http://127.0.0.1:11434".into(), key: String::new() }
+        Host { backend: Backend::LlamaCpp, name: "This computer · llama.cpp".into(), url: "http://127.0.0.1:8080".into(), key: String::new() }
     }
 }
 
@@ -47,6 +90,8 @@ pub struct Prefs {
     // ----- Connection -----
     pub hosts: Vec<Host>,
     pub active_host: usize,
+    #[serde(default)]
+    pub backend_migrated: bool,
 
     // ----- Chat defaults -----
     /// The model new chats start with; empty means the last one picked.
@@ -61,6 +106,15 @@ pub struct Prefs {
     pub top_p: f64,
     pub top_k: i64,
     pub num_ctx: i64,
+    /// Settings for this computer's llama.cpp user service.
+    pub llama_gpu_layers: String,
+    pub llama_flash_attention: String,
+    pub llama_models_max: u32,
+    pub llama_idle_seconds: i64,
+    pub model_settings: BTreeMap<String, ModelSettings>,
+    /// Levels a model accepts but the user does not want offered.
+    pub reasoning_hidden: BTreeMap<String, Vec<String>>,
+    pub model_settings_migrated: bool,
     /// What to do when a chat outgrows its context: "rolling", "keep_first" or "stop".
     pub overflow: String,
     /// Suggest follow-up questions after a reply.
@@ -127,6 +181,7 @@ impl Default for Prefs {
             last_chat: 0,
             hosts: vec![Host::default()],
             active_host: 0,
+            backend_migrated: true,
             new_chat_model: String::new(),
             last_model: String::new(),
             keep_loaded: true,
@@ -136,6 +191,13 @@ impl Default for Prefs {
             top_p: 0.9,
             top_k: 40,
             num_ctx: 8192,
+            llama_gpu_layers: "auto".into(),
+            llama_flash_attention: "auto".into(),
+            llama_models_max: 1,
+            llama_idle_seconds: -1,
+            model_settings: BTreeMap::new(),
+            reasoning_hidden: BTreeMap::new(),
+            model_settings_migrated: false,
             overflow: "rolling".into(),
             followups: false,
             keep_alive: "5m".into(),
@@ -181,10 +243,22 @@ impl Prefs {
     }
 }
 
+pub fn for_model(name: &str) -> ModelSettings {
+    get().model_settings.get(name).cloned().unwrap_or_default()
+}
+
 nixe_core::prefs_store!(Prefs, nixe_core::prefs::Store::standard_with(fix));
 
 /// There is always at least one host to talk to.
 fn fix(p: &mut Prefs) -> bool {
+    if !p.backend_migrated {
+        if !p.hosts.iter().any(|h| h.backend == Backend::LlamaCpp) {
+            p.hosts.insert(0, Host::default());
+        }
+        p.active_host = 0;
+        p.backend_migrated = true;
+        return true;
+    }
     if p.hosts.is_empty() {
         p.hosts.push(Host::default());
         return true;
@@ -193,17 +267,18 @@ fn fix(p: &mut Prefs) -> bool {
 }
 
 /// Normalise what people type for a host: add the scheme and default port.
-pub fn normalize_host(host: &str) -> String {
+pub fn normalize_host(host: &str, backend: Backend) -> String {
+    let port = if backend == Backend::LlamaCpp { 8080 } else { 11434 };
     let h = host.trim().trim_end_matches('/');
     if h.is_empty() {
-        return "http://127.0.0.1:11434".into();
+        return format!("http://127.0.0.1:{port}");
     }
     let with_scheme = if h.contains("://") { h.to_string() } else { format!("http://{h}") };
     let after_scheme = with_scheme.split("://").nth(1).unwrap_or("");
     if after_scheme.contains(':') || after_scheme.contains('/') || with_scheme.starts_with("https://") {
         with_scheme
     } else {
-        format!("{with_scheme}:11434")
+        format!("{with_scheme}:{port}")
     }
 }
 
@@ -213,10 +288,10 @@ mod tests {
 
     #[test]
     fn normalizes_hosts() {
-        assert_eq!(normalize_host(""), "http://127.0.0.1:11434");
-        assert_eq!(normalize_host("192.168.1.5"), "http://192.168.1.5:11434");
-        assert_eq!(normalize_host("http://box:8080/"), "http://box:8080");
-        assert_eq!(normalize_host("https://ollama.example.com"), "https://ollama.example.com");
+        assert_eq!(normalize_host("", Backend::LlamaCpp), "http://127.0.0.1:8080");
+        assert_eq!(normalize_host("192.168.1.5", Backend::Ollama), "http://192.168.1.5:11434");
+        assert_eq!(normalize_host("http://box:8080/", Backend::LlamaCpp), "http://box:8080");
+        assert_eq!(normalize_host("https://ollama.example.com", Backend::Ollama), "https://ollama.example.com");
     }
 
     #[test]
@@ -224,5 +299,23 @@ mod tests {
         let p: Prefs = toml::from_str("theme = \"nord\"").unwrap();
         assert_eq!(p.theme, "nord");
         assert_eq!(p.search_backend, "duckduckgo");
+    }
+
+    #[test]
+    fn model_ids_round_trip() {
+        let mut p = Prefs::default();
+        p.model_settings.insert("org/model:Q4_K_M".into(), ModelSettings { num_ctx: 65536, kv_cache: "q8_0".into(), ..Default::default() });
+        let restored: Prefs = toml::from_str(&toml::to_string(&p).unwrap()).unwrap();
+        assert_eq!(restored.model_settings["org/model:Q4_K_M"].num_ctx, 65536);
+        assert_eq!(restored.model_settings["org/model:Q4_K_M"].kv_cache, "q8_0");
+    }
+
+    #[test]
+    fn migrates_ollama_hosts_without_losing_them() {
+        let mut p: Prefs = toml::from_str("active_host = 0\n[[hosts]]\nname = 'Old'\nurl = '127.0.0.1:11434'").unwrap();
+        assert!(fix(&mut p));
+        assert_eq!(p.hosts[0].backend, Backend::LlamaCpp);
+        assert_eq!(p.hosts[1].backend, Backend::Ollama);
+        assert_eq!(p.hosts[1].name, "Old");
     }
 }

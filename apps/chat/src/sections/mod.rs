@@ -60,7 +60,7 @@ pub fn all() -> Vec<Section> {
             title: "Marketplace",
             group: "Models",
             icon: "chat-store-symbolic",
-            description: "Models on Hugging Face and in the Ollama library, and which fit this computer",
+            description: "GGUF models on Hugging Face and which fit this computer",
             build: marketplace::build,
         },
         Section {

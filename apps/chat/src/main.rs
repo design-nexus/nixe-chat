@@ -1,4 +1,4 @@
-//! Chat — a desktop client for Ollama.
+//! Chat — a desktop client for llama.cpp and Ollama.
 
 mod chatlist;
 mod clamp;
@@ -9,6 +9,7 @@ mod highlight;
 mod hub;
 mod hw;
 mod jsonview;
+mod llama;
 mod markdown;
 mod models;
 mod ollama;

@@ -5,18 +5,19 @@ use futures_util::StreamExt;
 use serde_json::{Value, json};
 use std::time::Duration;
 
-use crate::prefs::{Host, normalize_host};
+use crate::prefs::{Backend, Host, normalize_host};
 
 /// Where to reach a server. Cloned into background tasks.
 #[derive(Clone, Debug)]
 pub struct Conn {
     pub url: String,
     pub key: String,
+    pub backend: Backend,
 }
 
 impl From<&Host> for Conn {
     fn from(h: &Host) -> Self {
-        Conn { url: normalize_host(&h.url), key: h.key.clone() }
+        Conn { url: normalize_host(&h.url, h.backend), key: h.key.clone(), backend: h.backend }
     }
 }
 
@@ -25,11 +26,11 @@ impl Conn {
         Conn::from(&crate::prefs::get().host())
     }
 
-    fn url(&self, path: &str) -> String {
+    pub(crate) fn url(&self, path: &str) -> String {
         format!("{}{path}", self.url)
     }
 
-    fn get(&self, path: &str) -> reqwest::RequestBuilder {
+    pub(crate) fn get(&self, path: &str) -> reqwest::RequestBuilder {
         self.auth(client().get(self.url(path)))
     }
 
@@ -37,7 +38,7 @@ impl Conn {
         self.auth(client().post(self.url(path)))
     }
 
-    fn auth(&self, r: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    pub(crate) fn auth(&self, r: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         if self.key.is_empty() { r } else { r.bearer_auth(&self.key) }
     }
 }
@@ -54,13 +55,13 @@ pub fn client() -> reqwest::Client {
     .clone()
 }
 
-async fn check(r: reqwest::Response) -> Result<reqwest::Response> {
+pub(crate) async fn check(r: reqwest::Response) -> Result<reqwest::Response> {
     if r.status().is_success() {
         return Ok(r);
     }
     let status = r.status();
     let text = r.text().await.unwrap_or_default();
-    let msg = serde_json::from_str::<Value>(&text).ok().and_then(|v| v["error"].as_str().map(String::from)).unwrap_or(text);
+    let msg = serde_json::from_str::<Value>(&text).ok().and_then(|v| v["error"].as_str().or(v["error"]["message"].as_str()).map(String::from)).unwrap_or(text);
     bail!("{} {}", status.as_u16(), msg.trim())
 }
 
@@ -86,6 +87,7 @@ pub struct Running {
 #[derive(Clone, Debug, Default)]
 pub struct ModelInfo {
     pub capabilities: Vec<String>,
+    pub reasoning_efforts: Vec<String>,
     pub context_length: Option<u64>,
     pub parameters: String,
     pub template: String,
@@ -100,12 +102,14 @@ impl ModelInfo {
 }
 
 pub async fn version(conn: &Conn) -> Result<String> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::version(conn).await; }
     let r = check(conn.get("/api/version").timeout(Duration::from_secs(3)).send().await?).await?;
     let v: Value = r.json().await?;
     Ok(v["version"].as_str().unwrap_or("").to_string())
 }
 
 pub async fn tags(conn: &Conn) -> Result<Vec<Installed>> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::tags(conn).await; }
     let r = check(conn.get("/api/tags").timeout(Duration::from_secs(5)).send().await?).await?;
     let body: Value = r.json().await?;
     let mut models: Vec<Installed> = body["models"]
@@ -130,6 +134,7 @@ pub async fn tags(conn: &Conn) -> Result<Vec<Installed>> {
 }
 
 pub async fn running(conn: &Conn) -> Result<Vec<Running>> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::running(conn).await; }
     let r = check(conn.get("/api/ps").timeout(Duration::from_secs(5)).send().await?).await?;
     let body: Value = r.json().await?;
     Ok(body["models"]
@@ -146,6 +151,7 @@ pub async fn running(conn: &Conn) -> Result<Vec<Running>> {
 }
 
 pub async fn show(conn: &Conn, model: &str) -> Result<ModelInfo> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::show(conn, model).await; }
     let r = check(conn.post("/api/show").json(&json!({ "model": model })).timeout(Duration::from_secs(10)).send().await?).await?;
     let body: Value = r.json().await?;
     Ok(parse_show(&body))
@@ -163,6 +169,7 @@ fn parse_show(body: &Value) -> ModelInfo {
             .flatten()
             .filter_map(|c| c.as_str().map(String::from))
             .collect(),
+        reasoning_efforts: Vec::new(),
         context_length,
         parameters: s("parameters"),
         template: s("template"),
@@ -172,11 +179,13 @@ fn parse_show(body: &Value) -> ModelInfo {
 }
 
 pub async fn delete(conn: &Conn, model: &str) -> Result<()> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::delete(conn, model).await; }
     check(conn.auth(client().delete(conn.url("/api/delete"))).json(&json!({ "model": model })).send().await?).await?;
     Ok(())
 }
 
 pub async fn copy(conn: &Conn, source: &str, destination: &str) -> Result<()> {
+    if conn.backend == Backend::LlamaCpp { bail!("Copy is only available with Ollama"); }
     check(conn.post("/api/copy").json(&json!({ "source": source, "destination": destination })).send().await?).await?;
     Ok(())
 }
@@ -192,18 +201,21 @@ pub fn keep_alive_value(s: &str) -> Value {
 
 /// Drop a model from memory: an empty generate with `keep_alive: 0`.
 pub async fn unload(conn: &Conn, model: &str) -> Result<()> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::unload(conn, model).await; }
     check(conn.post("/api/generate").json(&json!({ "model": model, "keep_alive": 0 })).send().await?).await?;
     Ok(())
 }
 
 /// Load a model ahead of time so the first reply is quick.
 pub async fn preload(conn: &Conn, model: &str, keep_alive: &str) -> Result<()> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::preload(conn, model).await; }
     check(conn.post("/api/generate").json(&json!({ "model": model, "keep_alive": keep_alive_value(keep_alive) })).send().await?)
         .await?;
     Ok(())
 }
 
 pub async fn embed(conn: &Conn, model: &str, inputs: &[String]) -> Result<Vec<Vec<f32>>> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::embed(conn, model, inputs).await; }
     let r = check(
         conn.post("/api/embed")
             .json(&json!({ "model": model, "input": inputs }))
@@ -227,6 +239,7 @@ pub async fn embed(conn: &Conn, model: &str, inputs: &[String]) -> Result<Vec<Ve
 
 /// One-shot, non-streaming chat (titles, summaries).
 pub async fn complete(conn: &Conn, model: &str, messages: Value) -> Result<String> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::complete(conn, model, messages).await; }
     let body = json!({ "model": model, "messages": messages, "stream": false, "think": false });
     let r = check(conn.post("/api/chat").json(&body).timeout(Duration::from_secs(120)).send().await?).await;
     // Models without thinking support reject `think`; retry without it.
@@ -252,6 +265,7 @@ pub struct Progress {
 
 /// Pull a model, reporting progress. Ends when the stream does.
 pub async fn pull(conn: &Conn, model: &str, tx: async_channel::Sender<Progress>) -> Result<()> {
+    if conn.backend == Backend::LlamaCpp { return crate::llama::api::pull(conn, model, tx).await; }
     let r = check(conn.post("/api/pull").json(&json!({ "model": model, "stream": true })).send().await?).await?;
     read_ndjson(r, |v| {
         let _ = tx.try_send(Progress {
@@ -273,6 +287,7 @@ pub async fn create(
     parameters: serde_json::Map<String, Value>,
     tx: async_channel::Sender<Progress>,
 ) -> Result<()> {
+    if conn.backend == Backend::LlamaCpp { bail!("Create a model is only available with Ollama"); }
     let mut body = json!({ "model": name, "from": from, "stream": true });
     if !system.trim().is_empty() {
         body["system"] = json!(system);
@@ -347,90 +362,6 @@ pub async fn update_available(name: &str, local_digest: &str) -> Result<bool> {
     Ok(!local.is_empty() && remote != local)
 }
 
-// ---------- The local service ----------
-
-/// "active", "inactive", "failed", … from systemd, or whether `ollama serve` runs.
-pub fn service_state() -> String {
-    if systemd_unit_loaded() {
-        if let Some(state) = crate::cmd::output(&["systemctl", "is-active", "ollama"]).filter(|s| !s.is_empty()) {
-            return state;
-        }
-        // `is-active` exits non-zero for inactive units, so output() gives None.
-        return "inactive".into();
-    }
-    if serve_pids().is_empty() { "inactive".into() } else { "active".into() }
-}
-
-pub fn installed() -> bool {
-    crate::cmd::present("ollama")
-}
-
-/// Start, stop or restart the local server. Uses the systemd unit when there
-/// is one (asking for permission through polkit), otherwise `ollama serve`.
-pub fn control(action: &str) -> Result<String> {
-    if !matches!(action, "start" | "stop" | "restart") {
-        bail!("unknown service action {action}");
-    }
-    if systemd_unit_loaded() {
-        if crate::cmd::run(&["systemctl", action, "ollama"]).is_err() {
-            crate::cmd::run(&["pkexec", "systemctl", action, "ollama"])?;
-        }
-    } else {
-        if action != "start" {
-            for pid in serve_pids() {
-                // SAFETY: plain syscall on a pid we just listed.
-                unsafe { libc::kill(pid as i32, libc::SIGTERM) };
-            }
-        }
-        if action != "stop" && serve_pids().is_empty() {
-            start_user_server()?;
-        }
-    }
-    if action != "stop" {
-        std::thread::sleep(Duration::from_millis(800));
-    }
-    Ok(match action {
-        "start" => "Started Ollama",
-        "stop" => "Stopped Ollama",
-        _ => "Restarted Ollama",
-    }
-    .into())
-}
-
-fn start_user_server() -> Result<()> {
-    use std::os::unix::process::CommandExt;
-    let log_path = crate::paths::data_dir().join("ollama.log");
-    std::fs::create_dir_all(crate::paths::data_dir())?;
-    let log = std::fs::OpenOptions::new().create(true).append(true).open(&log_path)?;
-    std::process::Command::new("ollama")
-        .arg("serve")
-        .stdin(std::process::Stdio::null())
-        .stdout(log.try_clone()?)
-        .stderr(log)
-        .process_group(0)
-        .spawn()
-        .context("could not start ollama serve")?;
-    Ok(())
-}
-
-fn systemd_unit_loaded() -> bool {
-    crate::cmd::output(&["systemctl", "show", "-p", "LoadState", "--value", "ollama"]).is_some_and(|s| s.trim() == "loaded")
-}
-
-fn serve_pids() -> Vec<u32> {
-    let Ok(entries) = std::fs::read_dir("/proc") else { return vec![] };
-    entries
-        .flatten()
-        .filter_map(|e| {
-            let pid: u32 = e.file_name().to_str()?.parse().ok()?;
-            let cmdline = std::fs::read(e.path().join("cmdline")).ok()?;
-            let args: Vec<&[u8]> = cmdline.split(|b| *b == 0).collect();
-            let exe = String::from_utf8_lossy(args.first()?);
-            (exe.ends_with("ollama") && args.iter().any(|a| *a == b"serve")).then_some(pid)
-        })
-        .collect()
-}
-
 /// Ollama's error for a Hugging Face CDN redirect quotes a whole URL; say it plainly.
 pub fn short_error(message: &str) -> String {
     let lower = message.to_ascii_lowercase();
@@ -438,7 +369,7 @@ pub fn short_error(message: &str) -> String {
         return "Hugging Face redirected the download and Ollama blocked it. Update Ollama and try again.".into();
     }
     if lower.contains("connection refused") || lower.contains("error sending request") || lower.contains("tcp connect") {
-        return "Ollama isn't reachable. Start it, or check the server address in Settings.".into();
+        return "The model server isn't reachable. Check its service and address in Settings.".into();
     }
     if message.chars().count() > 200 { format!("{}…", message.chars().take(200).collect::<String>()) } else { message.into() }
 }
@@ -492,7 +423,7 @@ mod network_tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let conn =
-                super::Conn { url: std::env::var("OLLAMA_URL").unwrap_or("http://127.0.0.1:11434".into()), key: String::new() };
+                super::Conn { url: std::env::var("OLLAMA_URL").unwrap_or("http://127.0.0.1:11434".into()), key: String::new(), backend: crate::prefs::Backend::Ollama };
             for m in super::tags(&conn).await.unwrap() {
                 let newer = super::update_available(&m.name, &m.digest).await;
                 println!("{} -> {newer:?}", m.name);

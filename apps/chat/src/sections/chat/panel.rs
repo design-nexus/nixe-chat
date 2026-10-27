@@ -92,24 +92,37 @@ pub(super) fn fill(p: &Rc<Page>) {
     });
 
     b.append(&heading("Temperature"));
+    let model_defaults = prefs::for_model(&chat.model);
+    let local_llama = crate::llama::api::local_service();
     let p2 = p.clone();
-    b.append(&slider(0.0, 2.0, 0.05, pa.temperature.unwrap_or(pr.temperature), 2, move |v| {
+    b.append(&slider(0.0, 2.0, 0.05, pa.temperature.unwrap_or(if local_llama { model_defaults.temperature } else { pr.temperature }), 2, move |v| {
         with_params(&p2, |pa| pa.temperature = Some(v))
     }));
     b.append(&widgets::label("Lower is focused, higher is creative.", "panel-note"));
 
     b.append(&heading("Top P"));
     let p2 = p.clone();
-    b.append(&slider(0.05, 1.0, 0.05, pa.top_p.unwrap_or(pr.top_p), 2, move |v| with_params(&p2, |pa| pa.top_p = Some(v))));
+    b.append(&slider(0.05, 1.0, 0.05, pa.top_p.unwrap_or(if local_llama { model_defaults.top_p } else { pr.top_p }), 2, move |v| with_params(&p2, |pa| pa.top_p = Some(v))));
 
     b.append(&heading("Top K"));
     let p2 = p.clone();
-    b.append(&slider(1.0, 100.0, 1.0, pa.top_k.unwrap_or(pr.top_k) as f64, 0, move |v| {
+    b.append(&slider(0.0, 100.0, 1.0, pa.top_k.unwrap_or(if local_llama { model_defaults.top_k } else { pr.top_k }) as f64, 0, move |v| {
         with_params(&p2, |pa| pa.top_k = Some(v as i64))
     }));
+    if local_llama {
+        b.append(&heading("Min P"));
+        let p2 = p.clone();
+        b.append(&slider(0.0, 1.0, 0.01, pa.min_p.unwrap_or(model_defaults.min_p), 2,
+            move |v| with_params(&p2, |pa| pa.min_p = Some(v))));
+        b.append(&heading("Repetition penalty"));
+        let p2 = p.clone();
+        b.append(&slider(1.0, 2.0, 0.05, pa.repeat_penalty.unwrap_or(model_defaults.repeat_penalty), 2,
+            move |v| with_params(&p2, |pa| pa.repeat_penalty = Some(v))));
+    }
 
     b.append(&heading("Context length"));
     let max_ctx = models::info(&chat.model).and_then(|i| i.context_length).unwrap_or(131_072) as i64;
+    let max_ctx = if local_llama { max_ctx.min(crate::llama::presets::runtime_context(&chat.model).unwrap_or(model_defaults.num_ctx)) } else { max_ctx };
     let sizes: Vec<i64> =
         [2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144].into_iter().filter(|s| *s <= max_ctx.max(2048)).collect();
     let opts: Vec<(String, String)> =
@@ -117,7 +130,7 @@ pub(super) fn fill(p: &Rc<Page>) {
     let (_, dd) = {
         let p2 = p.clone();
         let opts2 = opts.clone();
-        let dd = widgets::dropdown(&opts, &pa.num_ctx.unwrap_or(pr.num_ctx).to_string());
+        let dd = widgets::dropdown(&opts, &pa.num_ctx.unwrap_or(if local_llama { model_defaults.num_ctx } else { pr.num_ctx }).to_string());
         dd.connect_selected_notify(move |d| {
             if let Some((v, _)) = opts2.get(d.selected() as usize) {
                 let n: i64 = v.parse().unwrap_or(8192);
@@ -127,7 +140,9 @@ pub(super) fn fill(p: &Rc<Page>) {
         ((), dd)
     };
     b.append(&dd);
-    b.append(&widgets::label("More context remembers more, and uses more memory.", "panel-note"));
+    b.append(&widgets::label(if crate::llama::api::local_service() {
+        "Limits this chat within the model's context length. Change the model limit on the Models page."
+    } else { "More context remembers more, and uses more memory." }, "panel-note"));
 
     b.append(&heading("When the context is full"));
     let opts = widgets::opts(crate::sections::settings::OVERFLOW);

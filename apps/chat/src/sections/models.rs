@@ -32,6 +32,7 @@ type DownloadRow = (u64, State, gtk::LevelBar, gtk::Label);
 
 pub fn build() -> gtk::Widget {
     let page = widgets::page("models");
+    let llama = prefs::get().host().backend == prefs::Backend::LlamaCpp;
 
     let banner = widgets::vbox(0);
     page.body.append(&banner);
@@ -39,14 +40,14 @@ pub fn build() -> gtk::Widget {
     // ----- Download -----
     let g = page.group("Download a model");
     let entry = gtk::Entry::new();
-    entry.set_placeholder_text(Some("llama3.2, qwen3:8b, hf.co/user/repo:Q4_K_M"));
+    entry.set_placeholder_text(Some(if llama { "user/repo-GGUF:Q4_K_M" } else { "llama3.2, qwen3:8b, hf.co/user/repo:Q4_K_M" }));
     entry.add_css_class("mono");
     entry.set_hexpand(true);
     let go = gtk::Button::with_label("Download");
     go.add_css_class("suggested-action");
     let row = widgets::row(
         "By name",
-        "Any model from <a href=\"https://ollama.com/library\">ollama.com/library</a>, or a GGUF on Hugging Face as <tt>hf.co/user/repo:quant</tt>.",
+        if llama { "A Hugging Face GGUF as <tt>user/repo:quant</tt>." } else { "Any model from <a href=\"https://ollama.com/library\">ollama.com/library</a>, or a GGUF on Hugging Face as <tt>hf.co/user/repo:quant</tt>." },
         None,
     );
     row.add_css_class("tall");
@@ -75,7 +76,7 @@ pub fn build() -> gtk::Widget {
         "Create…",
         |_| create_dialog(),
     );
-    g.add(&create_row);
+    if !llama { g.add(&create_row); }
 
     // ----- Downloads -----
     let dl = page.group("Downloads");
@@ -170,14 +171,16 @@ pub fn build() -> gtk::Widget {
             widgets::clear(&banner);
             if models::online() == Some(false) {
                 let b = widgets::banner(&crate::sections::chat::unreachable_markup(), true);
-                if crate::ollama::api::installed() {
+                if prefs::get().host().backend == prefs::Backend::LlamaCpp
+                    && prefs::normalize_host(&prefs::get().host().url, prefs::Backend::LlamaCpp) == "http://127.0.0.1:8080"
+                    && crate::llama::api::installed() {
                     for action in ["start", "restart"] {
                         let btn = gtk::Button::with_label(if action == "start" { "Start" } else { "Restart" });
                         btn.set_valign(gtk::Align::Center);
                         btn.connect_clicked(move |b| {
                             b.set_sensitive(false);
                             crate::cmd::background(
-                                move || api::control(action),
+                                move || crate::llama::api::control(action),
                                 |r| {
                                     match r {
                                         Ok(m) => window::toast(&m),
@@ -288,7 +291,7 @@ fn fill_installed(g: &widgets::Group, list: &gtk::Box) {
             });
         });
     });
-    head.append(&check);
+    if prefs::get().host().backend == prefs::Backend::Ollama { head.append(&check); }
     list.append(&head);
 
     if installed.is_empty() {
@@ -304,11 +307,18 @@ fn fill_installed(g: &widgets::Group, list: &gtk::Box) {
 
 fn model_row(m: &Installed, is_default: bool) -> gtk::Widget {
     let info = models::info(&m.name);
+    let drafter = info.as_ref().is_some_and(|i| i.has("draft"));
     let mut bits = vec![util::size(m.size)];
+    if drafter { bits.push("Companion drafter · requires a main model".into()); }
     for s in [&m.parameter_size, &m.quantization, &m.family] {
         if !s.is_empty() {
             bits.push(s.clone());
         }
+    }
+    if crate::llama::api::local_service() {
+        let settings = prefs::for_model(&m.name);
+        bits.push(format!("{} context · KV {}", util::count(settings.num_ctx as u64), settings.kv_cache.to_uppercase()));
+        if crate::llama::presets::pending(&m.name) { bits.push("Settings pending next load".into()); }
     }
     if let Some(t) = util::parse_time(&m.modified) {
         bits.push(format!("updated {}", util::ago(t)));
@@ -330,6 +340,7 @@ fn model_row(m: &Installed, is_default: bool) -> gtk::Widget {
             title_row.append(&widgets::tag("Update available", "accent"));
         }
         if let Some(i) = &info {
+            if drafter { title_row.append(&widgets::tag("Drafter", "")); }
             for (cap, label) in [("vision", "Vision"), ("tools", "Tools"), ("thinking", "Thinking"), ("embedding", "Embedding")] {
                 if i.has(cap) {
                     title_row.append(&widgets::tag(label, ""));
@@ -346,7 +357,7 @@ fn model_row(m: &Installed, is_default: bool) -> gtk::Widget {
         up.connect_clicked(move |_| pulls::start(&n));
         controls.append(&up);
     }
-    if info.as_ref().is_none_or(|i| !i.has("embedding") || i.has("completion")) {
+    if info.as_ref().is_none_or(|i| i.capabilities.is_empty() || i.has("completion")) {
         let chat = gtk::Button::with_label("Chat");
         let n = m.name.clone();
         chat.connect_clicked(move |_| {
@@ -359,6 +370,34 @@ fn model_row(m: &Installed, is_default: bool) -> gtk::Widget {
             }
         });
         controls.append(&chat);
+    }
+    if !drafter {
+        let loaded = models::is_loaded(&m.name);
+        let load = gtk::Button::with_label(if loaded { "Reload" } else { "Load" });
+        load.set_tooltip_text(Some(if loaded { "Unload and load this model again" } else { "Load this model into memory" }));
+        let name = m.name.clone();
+        load.connect_clicked(move |button| {
+            button.set_sensitive(false);
+            if loaded {
+                let (conn, n, keep_alive) = (Conn::current(), name.clone(), prefs::get().keep_alive);
+                rt::spawn(async move {
+                    api::unload(&conn, &n).await?;
+                    api::preload(&conn, &n, &keep_alive).await
+                }, |result| {
+                    if let Err(error) = result { window::toast(&format!("Couldn't reload model: {error:#}")); }
+                    models::refresh();
+                });
+            } else {
+                let prefs = prefs::get();
+                let running = models::running();
+                let unload = if prefs.host().backend == prefs::Backend::LlamaCpp
+                    && prefs.llama_models_max > 0 && running.len() >= prefs.llama_models_max as usize {
+                    running.into_iter().find(|m| m.name != name).map(|m| m.name)
+                } else { None };
+                models::load(&name, unload);
+            }
+        });
+        controls.append(&load);
     }
     let menu = gtk::MenuButton::new();
     menu.set_icon_name("view-more-symbolic");
@@ -390,6 +429,10 @@ fn model_menu(m: &Installed) -> gtk::Popover {
     let v = widgets::vbox(1);
     let name = m.name.clone();
     v.append(&menu_item(&pop, "Details…", move || details(&name)));
+    if crate::llama::api::local_service() {
+        let name = m.name.clone();
+        v.append(&menu_item(&pop, "Settings…", move || model_settings_dialog(&name)));
+    }
     let name = m.name.clone();
     v.append(&menu_item(&pop, "Use for new chats", move || {
         prefs::update(|p| p.new_chat_model = name.clone());
@@ -397,18 +440,7 @@ fn model_menu(m: &Installed) -> gtk::Popover {
         window::toast(&format!("New chats start with {name}"));
     }));
     let name = m.name.clone();
-    v.append(&menu_item(&pop, "Load now", move || {
-        let (conn, n, ka) = (Conn::current(), name.clone(), prefs::get().keep_alive);
-        window::toast(&format!("Loading {n}…"));
-        rt::spawn(async move { api::preload(&conn, &n, &ka).await }, |r| {
-            if let Err(e) = r {
-                window::toast(&format!("{e:#}"));
-            }
-            models::refresh_running();
-        });
-    }));
-    let name = m.name.clone();
-    v.append(&menu_item(&pop, "Copy as…", move || {
+    if prefs::get().host().backend == prefs::Backend::Ollama { v.append(&menu_item(&pop, "Copy as…", move || {
         let src = name.clone();
         widgets::prompt_text(
             "Copy model",
@@ -429,7 +461,7 @@ fn model_menu(m: &Installed) -> gtk::Popover {
                 });
             },
         );
-    }));
+    })); }
     let name = m.name.clone();
     v.append(&menu_item(&pop, "Download again", move || pulls::start(&name)));
     let name = m.name.clone();
@@ -437,9 +469,16 @@ fn model_menu(m: &Installed) -> gtk::Popover {
     let del = widgets::two_click("Delete", "Click again to delete", move || {
         p2.popdown();
         let (conn, n) = (Conn::current(), name.clone());
+        let deleted = name.clone();
         rt::spawn(async move { api::delete(&conn, &n).await }, move |r| {
             match r {
-                Ok(()) => window::toast("Model deleted"),
+                Ok(()) => {
+                    if crate::llama::api::local_service() {
+                        prefs::update(|p| { p.model_settings.remove(&deleted); });
+                        let _ = crate::llama::presets::sync();
+                    }
+                    window::toast("Model deleted");
+                },
                 Err(e) => window::toast(&format!("{e:#}")),
             }
             models::refresh();
@@ -449,6 +488,114 @@ fn model_menu(m: &Installed) -> gtk::Popover {
     v.append(&del);
     pop.set_child(Some(&v));
     pop
+}
+
+fn model_settings_dialog(name: &str) {
+    let current = prefs::for_model(name);
+    let (dialog, card) = widgets::dialog(&format!("Model settings · {}", util::model_label(name)), 520);
+    let scroller = gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never)
+        .min_content_height(480).max_content_height(640).propagate_natural_height(true).build();
+    let body = widgets::vbox(8);
+    scroller.set_child(Some(&body));
+    card.append(&scroller);
+
+    let context_opts = widgets::opts(&[("2048", "2K"), ("4096", "4K"), ("8192", "8K"),
+        ("16384", "16K"), ("32768", "32K"), ("65536", "64K"), ("131072", "128K"), ("262144", "256K")]);
+    let context = widgets::dropdown(&context_opts, &current.num_ctx.to_string());
+    body.append(&widgets::row("Context length", "Reserved when this model loads. Longer contexts use more memory.", Some(context.upcast_ref())));
+
+    let gpu_opts = widgets::opts(&[("auto", "Automatic"), ("all", "All layers"), ("0", "CPU only")]);
+    let gpu = widgets::dropdown(&gpu_opts, &current.gpu_layers);
+    body.append(&widgets::row("GPU offload", "Automatic usually gives the best fit.", Some(gpu.upcast_ref())));
+
+    let flash_opts = widgets::opts(&[("auto", "Automatic"), ("on", "On"), ("off", "Off")]);
+    let flash = widgets::dropdown(&flash_opts, &current.flash_attention);
+    body.append(&widgets::row("Flash Attention", "Quantized KV cache requires this to be on.", Some(flash.upcast_ref())));
+
+    let kv_opts = widgets::opts(&[("f16", "F16 · full precision"), ("q8_0", "Q8_0 · smaller"), ("q4_0", "Q4_0 · smallest")]);
+    let kv = widgets::dropdown(&kv_opts, &current.kv_cache);
+    body.append(&widgets::row("KV cache", "Applies the same type to keys and values. Q4_0 saves the most memory but may affect answers.", Some(kv.upcast_ref())));
+    let flash2 = flash.clone();
+    kv.connect_selected_notify(move |d| {
+        let quantized = d.selected() != 0;
+        if quantized { flash2.set_selected(1); }
+        flash2.set_sensitive(!quantized);
+    });
+    if current.kv_cache != "f16" { flash.set_selected(1); flash.set_sensitive(false); }
+
+    body.append(&widgets::label("SAMPLING", "group-title"));
+    let number = |title: &str, description: &str, min: f64, max: f64, step: f64, value: f64, digits: u32| {
+        let control = gtk::SpinButton::with_range(min, max, step);
+        control.set_digits(digits);
+        control.set_value(value);
+        body.append(&widgets::row(title, description, Some(control.upcast_ref())));
+        control
+    };
+    let temp = number("Temperature", "Lower is more focused.", 0.0, 2.0, 0.05, current.temperature, 2);
+    let top_p = number("Top P", "Probability mass considered during sampling.", 0.05, 1.0, 0.05, current.top_p, 2);
+    let top_k = number("Top K", "Number of likely tokens considered.", 0.0, 100.0, 1.0, current.top_k as f64, 0);
+    let min_p = number("Min P", "Filter unlikely tokens relative to the best one.", 0.0, 1.0, 0.01, current.min_p, 2);
+    let repeat = number("Repetition penalty", "Values above 1 reduce repetition.", 1.0, 2.0, 0.05, current.repeat_penalty, 2);
+
+    let detected = models::info(name).map(|i| i.reasoning_efforts).unwrap_or_default();
+    let hidden = prefs::get().reasoning_hidden.get(name).cloned().unwrap_or_default();
+    let mut effort_checks = Vec::new();
+    if !detected.is_empty() {
+        body.append(&widgets::label("REASONING LEVELS", "group-title"));
+        let help = widgets::label("The model's template accepts these levels. Hide any that do not work well with this model.", "dim");
+        help.set_wrap(true);
+        body.append(&help);
+        for &(label, level) in crate::llama::reasoning::CANDIDATES {
+            if !detected.iter().any(|s| s == level) { continue; }
+            let check = gtk::CheckButton::with_label(label);
+            check.set_active(!hidden.iter().any(|s| s == level));
+            body.append(&check);
+            effort_checks.push((level.to_string(), check));
+        }
+    }
+
+    let buttons = widgets::hbox(8);
+    buttons.set_halign(gtk::Align::End);
+    let cancel = gtk::Button::with_label("Cancel");
+    let save = gtk::Button::with_label("Save");
+    save.add_css_class("suggested-action");
+    buttons.append(&cancel);
+    buttons.append(&save);
+    card.append(&buttons);
+    let d = dialog.clone();
+    cancel.connect_clicked(move |_| d.close());
+    let d = dialog.clone();
+    let model = name.to_string();
+    save.connect_clicked(move |_| {
+        let setting = prefs::ModelSettings {
+            num_ctx: context_opts[context.selected() as usize].0.parse().unwrap_or(8192),
+            gpu_layers: gpu_opts[gpu.selected() as usize].0.clone(),
+            flash_attention: if kv.selected() == 0 { flash_opts[flash.selected() as usize].0.clone() } else { "on".into() },
+            kv_cache: kv_opts[kv.selected() as usize].0.clone(),
+            temperature: temp.value(), top_p: top_p.value(), top_k: top_k.value() as i64,
+            min_p: min_p.value(), repeat_penalty: repeat.value(),
+        };
+        let runtime_changed = setting != current;
+        let hidden: Vec<String> = effort_checks.iter().filter(|(_, check)| !check.is_active())
+            .map(|(level, _)| level.clone()).collect();
+        prefs::update(|p| {
+            p.model_settings.insert(model.clone(), setting);
+            if !effort_checks.is_empty() {
+                if hidden.is_empty() { p.reasoning_hidden.remove(&model); }
+                else { p.reasoning_hidden.insert(model.clone(), hidden); }
+            }
+        });
+        match crate::llama::presets::sync() {
+            Ok(()) => {
+                if runtime_changed { crate::llama::presets::mark_with_context(model.clone(), current.num_ctx); }
+                hub::emit(&hub::MODELS);
+                window::toast(if crate::llama::presets::pending(&model) { "Saved; runtime changes apply on the next model load" } else { "Model settings saved" });
+                d.close();
+            }
+            Err(e) => window::toast(&format!("Couldn't save model settings: {e:#}")),
+        }
+    });
+    dialog.present();
 }
 
 fn details(name: &str) {

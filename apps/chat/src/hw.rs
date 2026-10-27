@@ -101,13 +101,22 @@ impl Fit {
 /// models add layers, not KV heads): about 130 KB per token for both an 8B and
 /// a 27B grouped-query model at fp16, which the square root follows.
 pub fn needed(file_size: u64, ctx: u64) -> u64 {
+    needed_with_kv(file_size, ctx, "f16")
+}
+
+pub fn needed_with_kv(file_size: u64, ctx: u64, kv_type: &str) -> u64 {
     let gb = file_size as f64 / 1e9;
-    let kv = ctx as f64 * 45_000.0 * gb.max(0.5).sqrt();
+    let ratio = match kv_type { "q8_0" => 0.53125, "q4_0" => 0.28125, _ => 1.0 };
+    let kv = ctx as f64 * 45_000.0 * gb.max(0.5).sqrt() * ratio;
     file_size + kv as u64 + 500_000_000
 }
 
 pub fn fit(file_size: u64, ctx: u64, mem: Memory) -> Fit {
-    let need = needed(file_size, ctx);
+    fit_with_kv(file_size, ctx, "f16", mem)
+}
+
+pub fn fit_with_kv(file_size: u64, ctx: u64, kv_type: &str, mem: Memory) -> Fit {
+    let need = if kv_type == "f16" { needed(file_size, ctx) } else { needed_with_kv(file_size, ctx, kv_type) };
     if mem.vram > 0 && need as f64 <= mem.vram as f64 * 0.95 {
         Fit::Gpu
     } else if need as f64 <= mem.vram as f64 + mem.ram as f64 * 0.6 {
@@ -120,10 +129,19 @@ pub fn fit(file_size: u64, ctx: u64, mem: Memory) -> Fit {
 /// The quant to suggest: the largest common one that fits on the GPU, else
 /// the best that fits at all. Returns an index into `files`.
 pub fn recommend(files: &[(String, u64)], ctx: u64, mem: Memory) -> Option<usize> {
+    recommend_with(files, |_, size| fit(size, ctx, mem))
+}
+
+pub fn recommend_with(files: &[(String, u64)], classify: impl Fn(usize, u64) -> Fit) -> Option<usize> {
     const GOOD: [&str; 6] = ["Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M", "IQ4_XS", "Q3_K_M"];
     let pick =
-        |want: Fit| GOOD.iter().find_map(|q| files.iter().position(|(quant, size)| quant == q && fit(*size, ctx, mem) == want));
-    pick(Fit::Gpu).or_else(|| pick(Fit::Partial))
+        |want: Fit| GOOD.iter().find_map(|q| files.iter().enumerate().find(|(i, (quant, size))| quant == q && *size > 0 && classify(*i, *size) == want).map(|(i, _)| i));
+    pick(Fit::Gpu).or_else(|| pick(Fit::Partial)).or_else(|| {
+        [Fit::Gpu, Fit::Partial].into_iter().find_map(|want| {
+            files.iter().enumerate().filter(|(i, (_, size))| *size > 0 && classify(*i, *size) == want)
+                .max_by_key(|(_, (_, size))| *size).map(|(i, _)| i)
+        })
+    })
 }
 
 #[cfg(test)]
@@ -144,6 +162,8 @@ mod tests {
         assert_eq!(fit(16_500_000_000, 8192, gpu16), Fit::Partial);
         let cpu_only = Memory { vram: 0, ram: 16 * GB };
         assert_eq!(fit(4 * GB, 4096, cpu_only), Fit::Partial);
+        assert!(needed_with_kv(4 * GB, 65536, "q4_0") < needed_with_kv(4 * GB, 65536, "q8_0"));
+        assert!(needed_with_kv(4 * GB, 65536, "q8_0") < needed(4 * GB, 65536));
     }
 
     #[test]
@@ -163,6 +183,7 @@ mod tests {
             ("Q8_0".to_string(), 8_700_000_000),
         ];
         assert_eq!(recommend(&files, 4096, mem), Some(1));
+        assert_eq!(recommend(&[("Q4_0".into(), 4 * GB)], 4096, mem), Some(0));
     }
 }
 

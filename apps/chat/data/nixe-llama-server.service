@@ -1,0 +1,13 @@
+[Unit]
+Description=Nixe Chat llama.cpp model server (PrismML)
+After=network-online.target
+
+[Service]
+Type=simple
+Environment=LD_LIBRARY_PATH=%h/.local/lib/nixe-chat/llama.cpp
+ExecStart=%h/.local/lib/nixe-chat/llama.cpp/llama-server-launch --host 127.0.0.1 --port 8080 --jinja --models-preset %h/.config/nixe-chat/llama-models.ini
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

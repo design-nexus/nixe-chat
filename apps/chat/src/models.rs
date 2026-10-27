@@ -37,7 +37,7 @@ pub fn chat_models() -> Vec<String> {
         let s = s.borrow();
         s.installed
             .iter()
-            .filter(|m| s.info.get(&m.name).is_none_or(|i| !i.has("embedding") || i.has("completion")))
+            .filter(|m| s.info.get(&m.name).is_none_or(|i| i.capabilities.is_empty() || i.has("completion")))
             .map(|m| m.name.clone())
             .collect()
     })
@@ -77,6 +77,7 @@ pub fn is_installed(name: &str) -> bool {
 
 /// `llama3` → `llama3:latest`, the way Ollama lists it.
 pub fn with_tag(name: &str) -> String {
+    if prefs::get().host().backend == prefs::Backend::LlamaCpp { return name.to_string(); }
     let last = name.rsplit('/').next().unwrap_or(name);
     if last.contains(':') { name.to_string() } else { format!("{name}:latest") }
 }
@@ -93,12 +94,15 @@ pub fn updates() -> Vec<String> {
 /// it's installed, else the first installed.
 pub fn default_model() -> String {
     let p = prefs::get();
+    let backend = p.host().backend;
     let want = if p.new_chat_model.is_empty() { p.last_model } else { p.new_chat_model };
     let chat = chat_models();
     if !want.is_empty() && chat.contains(&want) {
         return want;
     }
-    chat.first().cloned().unwrap_or(want)
+    chat.first().cloned().unwrap_or_else(|| {
+        if backend == prefs::Backend::LlamaCpp { String::new() } else { want }
+    })
 }
 
 pub fn is_loaded(name: &str) -> bool {
@@ -137,7 +141,10 @@ pub fn pick(name: &str) {
     }
     prefs::update(|p| p.last_model = name.to_string());
     if prefs::get().keep_loaded {
-        load(name, Some(prev).filter(|p| !p.is_empty() && p != name));
+        let p = prefs::get();
+        let unload = if p.host().backend == prefs::Backend::LlamaCpp && p.llama_models_max > 1 { None }
+            else { Some(prev).filter(|p| !p.is_empty() && p != name) };
+        load(name, unload);
     }
 }
 
@@ -172,17 +179,33 @@ pub fn release_pinned() {
     if p.last_model.is_empty() || !is_loaded(&p.last_model) {
         return;
     }
+    if p.host().backend == prefs::Backend::LlamaCpp {
+        let (conn, name) = (Conn::current(), p.last_model);
+        rt::spawn(async move { api::unload(&conn, &name).await }, |_| refresh_running_then_emit());
+        return;
+    }
     let (conn, n, ka) = (Conn::current(), p.last_model.clone(), p.keep_alive.clone());
     rt::spawn(async move { api::preload(&conn, &n, &ka).await }, |_| refresh_running_then_emit());
 }
 
 fn refresh_running_then_emit() {
     let conn = Conn::current();
-    rt::spawn(async move { api::running(&conn).await }, |r| {
-        if let Ok(list) = r {
-            STATE.with(|s| s.borrow_mut().running = list);
+    rt::spawn(async move {
+        let running = api::running(&conn).await?;
+        let infos = futures_util::future::join_all(running.iter().map(|m| api::show(&conn, &m.name))).await;
+        Ok::<_, anyhow::Error>((running, infos))
+    }, |r| {
+        if let Ok((list, infos)) = r {
+            STATE.with(|s| {
+                let mut state = s.borrow_mut();
+                for (model, info) in list.iter().zip(infos) {
+                    if let Ok(info) = info { state.info.insert(model.name.clone(), info); }
+                }
+                state.running = list;
+            });
         }
         hub::emit(&hub::MODELS);
+        crate::llama::presets::apply_pending();
     });
 }
 
@@ -192,6 +215,7 @@ pub fn refresh() {
         return;
     }
     let conn = Conn::current();
+    let source = (conn.url.clone(), conn.backend);
     rt::spawn(
         async move {
             let tags = api::tags(&conn).await;
@@ -207,7 +231,16 @@ pub fn refresh() {
             }
             (tags, running, infos)
         },
-        |(tags, running, infos)| {
+        move |(tags, running, infos)| {
+            let current = Conn::current();
+            if (current.url, current.backend) != source {
+                STATE.with(|s| s.borrow_mut().refreshing = false);
+                refresh();
+                return;
+            }
+            if crate::llama::api::local_service() && let Ok(list) = &tags {
+                initialize_model_presets(list);
+            }
             STATE.with(|s| {
                 let mut s = s.borrow_mut();
                 s.refreshing = false;
@@ -216,6 +249,7 @@ pub fn refresh() {
                         s.online = Some(true);
                         s.error.clear();
                         s.installed = list;
+                        s.info.clear();
                     }
                     Err(e) => {
                         s.online = Some(false);
@@ -250,11 +284,51 @@ pub fn refresh() {
     );
 }
 
+fn initialize_model_presets(list: &[Installed]) {
+    thread_local! { static READY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+    if READY.with(|ready| ready.get()) { return; }
+    if !prefs::get().model_settings_migrated {
+        prefs::update(|p| {
+            let old = prefs::ModelSettings::from_legacy(p);
+            for model in list { p.model_settings.entry(model.name.clone()).or_insert_with(|| old.clone()); }
+            p.model_settings_migrated = true;
+        });
+    }
+    match crate::llama::presets::sync() {
+        Ok(()) => {
+            READY.with(|ready| ready.set(true));
+            crate::llama::presets::mark(prefs::get().model_settings.keys().cloned());
+        },
+        Err(e) => crate::window::toast(&format!("Couldn't save llama.cpp model settings: {e:#}")),
+    }
+}
+
+pub fn switch_host() {
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        s.installed.clear();
+        s.running.clear();
+        s.info.clear();
+        s.online = None;
+        s.error.clear();
+        s.updates.clear();
+        s.restored = false;
+    });
+    hub::emit(&hub::MODELS);
+    refresh();
+}
+
 /// Just the running list (the Models page polls this).
 pub fn refresh_running() {
     let conn = Conn::current();
-    rt::spawn(async move { api::running(&conn).await }, |r| {
-        if let Ok(list) = r {
+    let known: HashSet<String> = STATE.with(|s| s.borrow().running.iter().map(|m| m.name.clone()).collect());
+    rt::spawn(async move {
+        let list = api::running(&conn).await?;
+        let new: Vec<String> = list.iter().filter(|m| !known.contains(&m.name)).map(|m| m.name.clone()).collect();
+        let infos = futures_util::future::join_all(new.iter().map(|name| api::show(&conn, name))).await;
+        Ok::<_, anyhow::Error>((list, new, infos))
+    }, |r| {
+        if let Ok((list, new, infos)) = r {
             let changed = STATE.with(|s| {
                 let mut s = s.borrow_mut();
                 let changed = s
@@ -263,17 +337,25 @@ pub fn refresh_running() {
                     .map(|m| (&m.name, m.expires.as_str()))
                     .ne(list.iter().map(|m| (&m.name, m.expires.as_str())));
                 s.running = list;
+                for (name, info) in new.into_iter().zip(infos) {
+                    if let Ok(info) = info { s.info.insert(name, info); }
+                }
                 changed
             });
             if changed {
                 hub::emit(&hub::MODELS);
             }
+            crate::llama::presets::apply_pending();
         }
     });
 }
 
 /// Compare every installed model with its registry. `done` gets how many can update.
 pub fn check_updates(done: impl FnOnce(usize) + 'static) {
+    if prefs::get().host().backend == prefs::Backend::LlamaCpp {
+        done(0);
+        return;
+    }
     let list: Vec<(String, String)> = installed().into_iter().map(|m| (m.name, m.digest)).collect();
     rt::spawn(
         async move {

@@ -350,6 +350,7 @@ MANIFEST
 done
 
 # The suite's own command: nixe list, install, update, uninstall.
+bash "$src/apps/chat/scripts/install-llama.sh"
 [[ -x $bin/nixe ]] || install -m 755 "$src/bin/nixe" "$bin/nixe"
 
 update-desktop-database "$desk" 2>/dev/null || true

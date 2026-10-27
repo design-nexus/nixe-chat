@@ -20,6 +20,7 @@ pub enum State {
 pub struct Pull {
     pub id: u64,
     pub name: String,
+    conn: Conn,
     pub state: State,
     pub status: String,
     pub completed: u64,
@@ -77,6 +78,7 @@ pub fn start(name: &str) {
         p.push(Pull {
             id,
             name: name.clone(),
+            conn: Conn::current(),
             state: State::Queued,
             status: "Waiting".into(),
             completed: 0,
@@ -90,6 +92,12 @@ pub fn start(name: &str) {
 }
 
 pub fn cancel(id: u64) {
+    let target = PULLS.with(|p| p.borrow().iter().find(|x| x.id == id && x.active()).map(|x| (x.name.clone(), x.conn.clone())));
+    if let Some((name, conn)) = target {
+        if conn.backend == crate::prefs::Backend::LlamaCpp && conn.url != "http://127.0.0.1:8080" {
+            rt::spawn(async move { api::unload(&conn, &name).await }, |_| models::refresh());
+        }
+    }
     let running = CURRENT.with(|c| c.borrow().as_ref().filter(|(cid, _)| *cid == id).map(|(_, h)| h.clone()));
     if let Some(h) = running {
         h.abort();
@@ -118,7 +126,7 @@ fn pump() {
     if CURRENT.with(|c| c.borrow().is_some()) {
         return;
     }
-    let Some((id, name)) = PULLS.with(|p| p.borrow().iter().find(|x| x.state == State::Queued).map(|x| (x.id, x.name.clone())))
+    let Some((id, name, conn)) = PULLS.with(|p| p.borrow().iter().find(|x| x.state == State::Queued).map(|x| (x.id, x.name.clone(), x.conn.clone())))
     else {
         return;
     };
@@ -126,7 +134,7 @@ fn pump() {
         p.state = State::Running;
         p.status = "Starting".into();
     });
-    let conn = Conn::current();
+    hub::emit(&hub::PULLS);
     let (done_tx, done_rx) = async_channel::bounded::<Result<(), String>>(1);
     let handle = rt::stream(
         move |tx: async_channel::Sender<Progress>| async move {
@@ -191,7 +199,15 @@ fn pump() {
     });
 }
 
-/// "1.2 GB of 4.7 GB · 38 MB/s · 2 min left"
+/// A compact label for marketplace download buttons.
+pub fn brief(p: &Pull) -> String {
+    if p.total == 0 { return if p.state == State::Queued { "Queued".into() } else { "Starting…".into() }; }
+    let mut s = format!("{}%", (p.fraction() * 100.0).clamp(0.0, 100.0).floor() as u32);
+    if p.speed > 0.0 { s.push_str(&format!(" · {}/s", crate::util::size(p.speed as u64))); }
+    s
+}
+
+/// "26% · 1.2 GB of 4.7 GB · 38 MB/s · 2 min left"
 pub fn describe(p: &Pull) -> String {
     use crate::util::size;
     match &p.state {
@@ -201,7 +217,7 @@ pub fn describe(p: &Pull) -> String {
         State::Failed(e) => e.clone(),
         State::Running if p.total == 0 => capitalize(&p.status),
         State::Running => {
-            let mut s = format!("{} of {}", size(p.completed), size(p.total));
+            let mut s = format!("{}% · {} of {}", (p.fraction() * 100.0).clamp(0.0, 100.0).floor() as u32, size(p.completed), size(p.total));
             if p.speed > 0.0 {
                 s.push_str(&format!(" · {}/s", size(p.speed as u64)));
             }

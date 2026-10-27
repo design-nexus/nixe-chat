@@ -675,29 +675,29 @@ pub(crate) fn refresh_banners(p: &Page) {
     }
     match models::online() {
         Some(false) => {
-            let local =
-                prefs::get().active_host == 0 && crate::prefs::normalize_host(&prefs::get().host().url).contains("127.0.0.1");
+            let host = prefs::get().host();
+            let local = host.backend == prefs::Backend::LlamaCpp
+                && crate::prefs::normalize_host(&host.url, host.backend).contains("127.0.0.1");
             let b = widgets::banner(&unreachable_markup(), true);
-            if local && crate::ollama::api::installed() {
-                let start = gtk::Button::with_label("Start Ollama");
+            if local && crate::llama::api::installed() {
+                let start = gtk::Button::with_label("Start llama.cpp");
                 start.set_valign(gtk::Align::Center);
                 start.connect_clicked(|b| {
                     b.set_sensitive(false);
                     crate::cmd::background(
-                        || crate::ollama::api::control("start"),
+                        || crate::llama::api::control("start"),
                         |r| {
                             match r {
                                 Ok(m) => window::toast(&m),
-                                Err(e) => window::toast(&format!("Couldn't start Ollama: {e}")),
+                                Err(e) => window::toast(&format!("Couldn't start llama.cpp: {e}")),
                             }
                             models::refresh();
                         },
                     );
                 });
                 b.append(&start);
-            } else if !crate::ollama::api::installed() && local {
-                let l = gtk::LinkButton::with_label("https://ollama.com/download", "Get Ollama");
-                b.append(&l);
+            } else if local {
+                b.append(&widgets::label("Install the llama.cpp service from Chat's installer.", "dim"));
             }
             p.banners.append(&b);
         }
@@ -736,7 +736,7 @@ pub(crate) fn refresh_banners(p: &Page) {
 
 /// The offline banner's text: a bold lead-in, then the error without repeating it.
 pub(crate) fn unreachable_markup() -> String {
-    const LEAD: &str = "Ollama isn't reachable.";
+    const LEAD: &str = "The model server isn't reachable.";
     let err = models::error();
     let rest = err.strip_prefix(LEAD).unwrap_or(&err).trim();
     format!("<b>{LEAD}</b> {}", crate::util::esc(rest))

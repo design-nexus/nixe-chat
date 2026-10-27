@@ -181,14 +181,25 @@ pub fn build() -> gtk::Widget {
             (model, name, md)
         });
         let names_labels: Vec<gtk::Label> = cols.iter().map(|c| c.1.clone()).collect();
-        for (model, _, md) in cols {
-            let (r2, votes3, fb2, labels) = (r.clone(), votes2.clone(), fb.clone(), names_labels.clone());
-            run_one(&model, &text, md, move || {
-                r2.done.set(r2.done.get() + 1);
-                if r2.done.get() == 2 {
-                    show_votes(&votes3, &r2, &labels, fb2.clone());
-                }
+        if prefs::get().host().backend == prefs::Backend::LlamaCpp {
+            let [(a, _, a_md), (b, _, b_md)] = cols;
+            let (r2, votes3, fb2, labels, prompt) = (r.clone(), votes2.clone(), fb.clone(), names_labels.clone(), text.clone());
+            run_one(&a, &text, a_md, move || {
+                r2.done.set(1);
+                let (r3, votes4, fb3, labels2) = (r2.clone(), votes3.clone(), fb2.clone(), labels.clone());
+                run_one(&b, &prompt, b_md.clone(), move || {
+                    r3.done.set(2);
+                    show_votes(&votes4, &r3, &labels2, fb3.clone());
+                });
             });
+        } else {
+            for (model, _, md) in cols {
+                let (r2, votes3, fb2, labels) = (r.clone(), votes2.clone(), fb.clone(), names_labels.clone());
+                run_one(&model, &text, md, move || {
+                    r2.done.set(r2.done.get() + 1);
+                    if r2.done.get() == 2 { show_votes(&votes3, &r2, &labels, fb2.clone()); }
+                });
+            }
         }
     });
     // Developer aid: CHAT_SNAPSHOT_ARENA="prompt" plays a round on its own.
@@ -211,6 +222,8 @@ pub fn build() -> gtk::Widget {
 
 fn run_one(model: &str, prompt: &str, md: Rc<Markdown>, done: impl Fn() + 'static) {
     let pr = prefs::get();
+    let settings = prefs::for_model(model);
+    let local_llama = crate::llama::api::local_service();
     let think = models::has(model, "thinking").then_some(false);
     let req = Request {
         conn: Conn::current(),
@@ -219,7 +232,9 @@ fn run_one(model: &str, prompt: &str, md: Rc<Markdown>, done: impl Fn() + 'stati
         tools: vec![],
         think,
         format: None,
-        options: json!({ "temperature": pr.temperature, "num_ctx": pr.num_ctx }),
+        options: if local_llama { json!({ "temperature": settings.temperature, "top_p": settings.top_p,
+            "top_k": settings.top_k, "min_p": settings.min_p, "repeat_penalty": settings.repeat_penalty,
+            "num_ctx": settings.num_ctx }) } else { json!({ "temperature": pr.temperature, "num_ctx": pr.num_ctx }) },
         keep_alive: models::keep_alive_for(model),
         max_rounds: 1,
         tool_ctx: tools::Ctx { prefs: pr },

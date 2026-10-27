@@ -225,6 +225,8 @@ fn ask(q: &Rc<Quick>, scroll: &gtk::ScrolledWindow, open_btn: &gtk::Button) {
     let safe: Vec<String> =
         pr.tools_enabled.iter().filter(|t| tools::BUILTIN.iter().any(|i| i.name == t.as_str() && !i.asks)).cloned().collect();
     let model = q.model.borrow().clone();
+    let md = prefs::for_model(&model);
+    let local_llama = crate::llama::api::local_service();
     let info = models::info(&model);
     let can = |c: &str| info.as_ref().is_some_and(|i| i.has(c));
     let req = Request {
@@ -234,7 +236,9 @@ fn ask(q: &Rc<Quick>, scroll: &gtk::ScrolledWindow, open_btn: &gtk::Button) {
         tools: if can("tools") { tools::definitions(&safe, pr.location_mode != "off") } else { vec![] },
         think: can("thinking").then_some(false),
         format: None,
-        options: json!({ "temperature": pr.temperature, "num_ctx": pr.num_ctx }),
+        options: if local_llama { json!({ "temperature": md.temperature, "top_p": md.top_p, "top_k": md.top_k,
+            "min_p": md.min_p, "repeat_penalty": md.repeat_penalty, "num_ctx": md.num_ctx }) }
+            else { json!({ "temperature": pr.temperature, "num_ctx": pr.num_ctx }) },
         keep_alive: models::keep_alive_for(&model),
         max_rounds: 4,
         tool_ctx: tools::Ctx { prefs: pr },

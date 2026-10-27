@@ -3,9 +3,22 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::Value;
+use pulldown_cmark::{Event, Parser};
+use scraper::Html;
+use std::fs;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::util::{encode_path, encode_query};
+
+pub mod download;
+
+/// Projectors and speculative drafters are companion files, not chat models.
+pub fn auxiliary_gguf(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+    name.contains("mmproj") || name.contains("dflash") || name.contains("drafter")
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sort {
@@ -119,6 +132,58 @@ fn client() -> reqwest::Client {
         .unwrap_or_default()
 }
 
+fn token_path() -> PathBuf {
+    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".config"))
+        .join("nixe-chat/huggingface.token")
+}
+
+fn shared_token_path() -> PathBuf {
+    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    std::env::var_os("HF_HOME").map(PathBuf::from).unwrap_or_else(|| {
+        std::env::var_os("XDG_CACHE_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".cache"))
+            .join("huggingface")
+    }).join("token")
+}
+
+pub fn has_app_token() -> bool { fs::read_to_string(token_path()).is_ok_and(|s| !s.trim().is_empty()) }
+pub fn has_shared_token() -> bool { fs::read_to_string(shared_token_path()).is_ok_and(|s| !s.trim().is_empty()) }
+
+fn token() -> Option<String> {
+    for path in [token_path(), shared_token_path()] {
+        if let Ok(s) = fs::read_to_string(path) && !s.trim().is_empty() { return Some(s.trim().into()); }
+    }
+    None
+}
+
+pub fn save_token(value: &str) -> Result<()> {
+    let path = token_path();
+    fs::create_dir_all(path.parent().unwrap())?;
+    use std::io::Write;
+    let mut file = fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&path)?;
+    file.set_permissions(fs::Permissions::from_mode(0o600))?;
+    file.write_all(value.trim().as_bytes())?;
+    Ok(())
+}
+
+pub fn remove_app_token() -> Result<()> {
+    match fs::remove_file(token_path()) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn whoami(value: &str) -> Result<String> {
+    let response: Value = client().get("https://huggingface.co/api/whoami-v2")
+        .bearer_auth(value.trim()).send().await?.error_for_status().context("Hugging Face login")?.json().await?;
+    Ok(response["name"].as_str().unwrap_or("Hugging Face account").to_string())
+}
+
+fn auth(req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    if let Some(t) = token() { req.bearer_auth(t) } else { req }
+}
+
 #[derive(Deserialize)]
 struct ApiModel {
     id: String,
@@ -135,8 +200,7 @@ struct ApiModel {
 }
 
 pub async fn search(query: &str, sort: Sort, kind: Kind) -> Result<Vec<Model>> {
-    let raw: Vec<ApiModel> = client()
-        .get(search_url(query, sort, kind))
+    let raw: Vec<ApiModel> = auth(client().get(search_url(query, sort, kind)))
         .send()
         .await?
         .error_for_status()
@@ -158,7 +222,7 @@ pub async fn search(query: &str, sort: Sort, kind: Kind) -> Result<Vec<Model>> {
 
 pub async fn detail(repo: &str) -> Result<Detail> {
     let url = format!("https://huggingface.co/api/models/{}", encode_path(repo));
-    let v: Value = client().get(url).send().await?.error_for_status().context("Hugging Face model")?.json().await?;
+    let v: Value = auth(client().get(url)).send().await?.error_for_status().context("Hugging Face model")?.json().await?;
     let mut d = Detail {
         params: v["gguf"]["total"].as_u64().unwrap_or(0),
         architecture: v["gguf"]["architecture"].as_str().unwrap_or("").into(),
@@ -185,7 +249,7 @@ struct TreeItem {
 
 pub async fn gguf_files(repo: &str) -> Result<Vec<GgufFile>> {
     let url = format!("https://huggingface.co/api/models/{}/tree/main?recursive=true", encode_path(repo));
-    let raw: Vec<TreeItem> = client().get(url).send().await?.error_for_status().context("Hugging Face file list")?.json().await?;
+    let raw: Vec<TreeItem> = auth(client().get(url)).send().await?.error_for_status().context("Hugging Face file list")?.json().await?;
     Ok(collect_files(raw))
 }
 
@@ -194,7 +258,7 @@ fn collect_files(raw: Vec<TreeItem>) -> Vec<GgufFile> {
     let mut files: Vec<GgufFile> = Vec::new();
     for item in raw {
         let lower = item.path.to_ascii_lowercase();
-        if !lower.ends_with(".gguf") || lower.contains("mmproj") {
+        if !lower.ends_with(".gguf") || auxiliary_gguf(&item.path) {
             continue;
         }
         let quant = quant_tag(&item.path);
@@ -219,8 +283,26 @@ fn is_split(path: &str) -> bool {
 /// The model card, without its YAML front matter.
 pub async fn readme(repo: &str) -> Result<String> {
     let url = format!("https://huggingface.co/{}/raw/main/README.md", encode_path(repo));
-    let text = client().get(url).send().await?.error_for_status()?.text().await?;
-    Ok(strip_front_matter(&text).to_string())
+    let text = auth(client().get(url)).send().await?.error_for_status()?.text().await?;
+    Ok(plain_html(strip_front_matter(&text)))
+}
+
+/// Keep Markdown syntax, but turn a model card's raw HTML into readable text.
+fn plain_html(markdown: &str) -> String {
+    let mut out = String::with_capacity(markdown.len());
+    let mut end = 0;
+    for (event, range) in Parser::new(markdown).into_offset_iter() {
+        if !matches!(event, Event::Html(_) | Event::InlineHtml(_)) || range.start < end { continue; }
+        out.push_str(&markdown[end..range.start]);
+        let html = &markdown[range.clone()];
+        let fragment = Html::parse_fragment(html);
+        let value = fragment.root_element().text().collect::<String>();
+        if html.trim_start().starts_with("<br") { out.push('\n'); }
+        else { out.push_str(&value); }
+        end = range.end;
+    }
+    out.push_str(&markdown[end..]);
+    out
 }
 
 pub fn strip_front_matter(text: &str) -> &str {
@@ -268,6 +350,12 @@ fn match_quant(s: &str) -> Option<usize> {
     }
     if s.starts_with("MXFP") {
         return take_body(s, 4, 1);
+    }
+    if s.starts_with("PQ") {
+        return take_body(s, 2, 2);
+    }
+    if s.starts_with("PTQ") {
+        return take_body(s, 3, 2);
     }
     if s.starts_with("IQ") {
         return take_body(s, 2, 2);
@@ -326,6 +414,9 @@ mod tests {
         assert_eq!(quant_tag("model-IQ3_M.gguf"), "IQ3_M");
         assert_eq!(quant_tag("foo-BF16.gguf"), "BF16");
         assert_eq!(quant_tag("sub/bar-IQ4_XS.gguf"), "IQ4_XS");
+        assert_eq!(quant_tag("Ternary-Bonsai-2-27B-PQ2_0.gguf"), "PQ2_0");
+        assert_eq!(quant_tag("Ternary-Bonsai-2-27B-PTQ1_0.gguf"), "PTQ1_0");
+        assert!(auxiliary_gguf("Ternary-Bonsai-2-9B-DFlash2-Q8_0.gguf"));
         assert_eq!(quant_tag("Q8_0/big-Q8_0-00001-of-00002.gguf"), "Q8_0");
         assert_eq!(ollama_ref("unsloth/Qwen3-8B-GGUF", "Q4_K_M"), "hf.co/unsloth/Qwen3-8B-GGUF:Q4_K_M");
     }
@@ -349,5 +440,11 @@ mod tests {
     fn front_matter() {
         assert_eq!(strip_front_matter("---\nlicense: mit\n---\n# Hi"), "# Hi");
         assert_eq!(strip_front_matter("# Hi"), "# Hi");
+    }
+
+    #[test]
+    fn model_card_html() {
+        assert_eq!(plain_html("<div>Hello</div>\n\n**world**"), "Hello\n\n**world**");
+        assert_eq!(plain_html("Model <span>name</span><br>next"), "Model name\nnext");
     }
 }

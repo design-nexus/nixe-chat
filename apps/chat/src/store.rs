@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS kchunks (
     id INTEGER PRIMARY KEY, kb INTEGER NOT NULL REFERENCES kbases(id) ON DELETE CASCADE,
     doc INTEGER NOT NULL REFERENCES kdocs(id) ON DELETE CASCADE, text TEXT NOT NULL, vec BLOB NOT NULL);
 CREATE INDEX IF NOT EXISTS kchunks_kb ON kchunks(kb);
+CREATE TABLE IF NOT EXISTS kchunk_vectors (
+    chunk INTEGER NOT NULL REFERENCES kchunks(id) ON DELETE CASCADE,
+    backend TEXT NOT NULL, model TEXT NOT NULL, vec BLOB NOT NULL,
+    PRIMARY KEY (chunk, backend, model));
 CREATE TABLE IF NOT EXISTS arena (
     id INTEGER PRIMARY KEY, prompt TEXT NOT NULL, model_a TEXT NOT NULL, model_b TEXT NOT NULL,
     winner TEXT NOT NULL, created INTEGER NOT NULL);
@@ -77,6 +81,11 @@ fn migrate(db: &Connection) -> Result<()> {
         }
         db.execute_batch("PRAGMA user_version = 1")?;
     }
+    if version < 2 {
+        db.execute_batch("ALTER TABLE kdocs ADD COLUMN backend TEXT NOT NULL DEFAULT 'ollama';
+                          ALTER TABLE kdocs ADD COLUMN model TEXT NOT NULL DEFAULT '';
+                          PRAGMA user_version = 2")?;
+    }
     Ok(())
 }
 
@@ -99,9 +108,13 @@ pub struct Params {
     pub temperature: Option<f64>,
     pub top_p: Option<f64>,
     pub top_k: Option<i64>,
+    pub min_p: Option<f64>,
+    pub repeat_penalty: Option<f64>,
     pub num_ctx: Option<i64>,
     pub seed: Option<i64>,
     pub think: Option<bool>,
+    /// llama.cpp chat template reasoning level for this chat.
+    pub reasoning_effort: Option<String>,
     /// What to do when the chat outgrows its context; `None` uses the default.
     pub overflow: Option<String>,
     /// Tools for this chat; `None` uses the defaults from Settings.
@@ -721,14 +734,14 @@ fn blob_to_vec(b: &[u8]) -> Vec<f32> {
     b.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
 }
 
-pub fn add_kdoc(kb: i64, name: &str, chunks: &[(String, Vec<f32>)]) -> Result<()> {
+pub fn add_kdoc(kb: i64, name: &str, backend: &str, model: &str, chunks: &[(String, Vec<f32>)]) -> Result<()> {
     with(|db| {
         db.execute_batch("BEGIN")?;
         let r = (|| -> Result<()> {
             let chars: usize = chunks.iter().map(|c| c.0.chars().count()).sum();
             db.execute(
-                "INSERT INTO kdocs (kb, name, chars, created) VALUES (?1, ?2, ?3, ?4)",
-                params![kb, name, chars as i64, util::now()],
+                "INSERT INTO kdocs (kb, name, chars, created, backend, model) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![kb, name, chars as i64, util::now(), backend, model],
             )?;
             let doc = db.last_insert_rowid();
             let mut st = db.prepare("INSERT INTO kchunks (kb, doc, text, vec) VALUES (?1, ?2, ?3, ?4)")?;
@@ -742,16 +755,36 @@ pub fn add_kdoc(kb: i64, name: &str, chunks: &[(String, Vec<f32>)]) -> Result<()
     })
 }
 
-/// Every chunk in the given knowledge bases: (document name, text, vector).
-pub fn kchunks(kbs: &[i64]) -> Result<Vec<(String, String, Vec<f32>)>> {
+/// Chunks that still need vectors for a selected backend and embedding model.
+pub fn missing_vectors(kb: i64, backend: &str, model: &str) -> Result<Vec<(i64, String)>> {
     with(|db| {
+        let mut st = db.prepare("SELECT c.id, c.text FROM kchunks c JOIN kdocs d ON d.id=c.doc
+            LEFT JOIN kchunk_vectors v ON v.chunk=c.id AND v.backend=?2 AND v.model=?3
+            WHERE c.kb=?1 AND NOT (d.backend=?2 AND COALESCE(NULLIF(d.model,''), (SELECT model FROM kbases WHERE id=?1))=?3)
+            AND v.chunk IS NULL")?;
+        Ok(st.query_map(params![kb, backend, model], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?)
+    })
+}
+
+pub fn save_vectors(backend: &str, model: &str, vectors: &[(i64, Vec<f32>)]) -> Result<()> {
+    with(|db| {
+        let mut st = db.prepare("INSERT OR REPLACE INTO kchunk_vectors (chunk, backend, model, vec) VALUES (?1,?2,?3,?4)")?;
+        for (id, vec) in vectors { st.execute(params![id, backend, model, vec_to_blob(vec)])?; }
+        Ok(())
+    })
+}
+
+pub fn kchunks_for(kb: i64, backend: &str, model: &str) -> Result<Vec<(String, String, Vec<f32>)>> {
+    with(|db| {
+        let mut st = db.prepare("SELECT d.name, c.text, CASE WHEN d.backend=?2 AND
+            COALESCE(NULLIF(d.model,''), (SELECT model FROM kbases WHERE id=?1))=?3 THEN c.vec ELSE v.vec END
+            FROM kchunks c JOIN kdocs d ON d.id=c.doc
+            LEFT JOIN kchunk_vectors v ON v.chunk=c.id AND v.backend=?2 AND v.model=?3
+            WHERE c.kb=?1")?;
         let mut out = Vec::new();
-        let mut st = db.prepare("SELECT kdocs.name, kchunks.text, kchunks.vec FROM kchunks JOIN kdocs ON kdocs.id = kchunks.doc WHERE kchunks.kb = ?1")?;
-        for kb in kbs {
-            for r in st.query_map([kb], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Vec<u8>>(2)?)))? {
-                let (n, t, b) = r?;
-                out.push((n, t, blob_to_vec(&b)));
-            }
+        for row in st.query_map(params![kb, backend, model], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<Vec<u8>>>(2)?)))? {
+            let (name, text, vec) = row?;
+            if let Some(vec) = vec { out.push((name, text, blob_to_vec(&vec))); }
         }
         Ok(out)
     })
@@ -972,9 +1005,14 @@ pub mod tests {
     fn knowledge_vectors_round_trip() {
         scratch();
         let kb = add_kbase("docs", "nomic").unwrap();
-        add_kdoc(kb, "a.md", &[("hello".into(), vec![0.5, -1.0])]).unwrap();
-        let chunks = kchunks(&[kb]).unwrap();
+        add_kdoc(kb, "a.md", "ollama", "nomic", &[("hello".into(), vec![0.5, -1.0])]).unwrap();
+        let chunks = kchunks_for(kb, "ollama", "nomic").unwrap();
         assert_eq!(chunks[0].2, vec![0.5, -1.0]);
+        let missing = missing_vectors(kb, "llama_cpp", "embed").unwrap();
+        assert_eq!(missing.len(), 1);
+        save_vectors("llama_cpp", "embed", &[(missing[0].0, vec![0.25, 0.75])]).unwrap();
+        assert_eq!(kchunks_for(kb, "llama_cpp", "embed").unwrap()[0].2, vec![0.25, 0.75]);
+        assert_eq!(kchunks_for(kb, "ollama", "nomic").unwrap()[0].2, vec![0.5, -1.0]);
         assert_eq!(kbases().unwrap()[0].docs.len(), 1);
     }
 }

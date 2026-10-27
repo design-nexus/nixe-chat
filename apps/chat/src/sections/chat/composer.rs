@@ -39,6 +39,7 @@ pub struct Composer {
     ctx: gtk::Box,
     ctx_bar: gtk::LevelBar,
     ctx_label: gtk::Label,
+    reasoning: gtk::MenuButton,
     note: gtk::Label,
     attachments: RefCell<Vec<Attachment>>,
     streaming: Cell<bool>,
@@ -153,6 +154,11 @@ impl Composer {
         ctx.append(&ctx_bar);
         ctx.append(&ctx_label);
         chips.append(&ctx);
+        let reasoning = gtk::MenuButton::new();
+        reasoning.add_css_class("reasoning-level");
+        reasoning.set_tooltip_text(Some("Reasoning effort for this chat"));
+        reasoning.set_visible(false);
+        chips.append(&reasoning);
         // Chips wrap away on narrow windows rather than widening them.
         let chip_scroll = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::External)
@@ -210,6 +216,7 @@ impl Composer {
             ctx,
             ctx_bar,
             ctx_label,
+            reasoning,
             note,
             attachments: RefCell::new(Vec::new()),
             streaming: Cell::new(false),
@@ -288,8 +295,10 @@ impl Composer {
             {
                 p.st.borrow_mut().chat_mut().params.think = Some(b.is_active());
                 super::save_chat(&p);
+                c.reasoning.set_sensitive(b.is_active());
             }
         });
+        self.reasoning.set_create_popup_func(|m| m.set_popover(Some(&reasoning_popover())));
         self.tools_btn.set_create_popup_func(|m| m.set_popover(Some(&tools_popover())));
         self.kb_btn.set_create_popup_func(|m| m.set_popover(Some(&knowledge_popover())));
 
@@ -493,6 +502,15 @@ impl Composer {
         let thinks = info.as_ref().is_some_and(|i| i.has("thinking"));
         self.think.set_visible(thinks);
         self.think.set_active(chat.params.think.unwrap_or(pr.think));
+        let levels = info.as_ref().map(|i| i.reasoning_efforts.as_slice()).unwrap_or(&[]);
+        let hidden = pr.reasoning_hidden.get(&chat.model).map(Vec::as_slice).unwrap_or(&[]);
+        let choices = crate::llama::reasoning::options(levels, hidden);
+        self.reasoning.set_visible(!choices.is_empty());
+        self.reasoning.set_sensitive(chat.params.think.unwrap_or(pr.think));
+        let level = crate::llama::reasoning::effective(&choices, chat.params.reasoning_effort.as_deref())
+            .and_then(crate::llama::reasoning::label).unwrap_or("");
+        let label = if level.is_empty() { "Reasoning".to_string() } else { format!("Reasoning: {level}") };
+        self.reasoning.set_label(&label);
         self.syncing.set(false);
         self.web.set_tooltip_text(Some(if tools_ok {
             "Web search"
@@ -878,6 +896,33 @@ fn tools_popover() -> gtk::Popover {
         pop2.popdown();
     });
     v.append(&reset);
+    pop.set_child(Some(&v));
+    pop
+}
+
+fn reasoning_popover() -> gtk::Popover {
+    let pop = gtk::Popover::new();
+    let v = widgets::vbox(4);
+    v.add_css_class("popover-body");
+    v.append(&widgets::label("REASONING LEVEL", "menu-heading-small"));
+    let Some(p) = super::page() else { return pop };
+    let model = p.st.borrow().chat().model.clone();
+    let levels = models::info(&model).map(|i| i.reasoning_efforts).unwrap_or_default();
+    let hidden = prefs::get().reasoning_hidden.get(&model).cloned().unwrap_or_default();
+    for (label, level) in crate::llama::reasoning::options(&levels, &hidden) {
+        let button = gtk::Button::with_label(label);
+        button.add_css_class("flat");
+        let pop2 = pop.clone();
+        button.connect_clicked(move |_| {
+            if let Some(p) = super::page() {
+                p.st.borrow_mut().chat_mut().params.reasoning_effort = Some(level.to_owned());
+                super::save_chat(&p);
+                p.composer.refresh();
+            }
+            pop2.popdown();
+        });
+        v.append(&button);
+    }
     pop.set_child(Some(&v));
     pop
 }

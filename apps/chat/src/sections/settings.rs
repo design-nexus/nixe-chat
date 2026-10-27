@@ -5,9 +5,9 @@ use gtk::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::prefs::{self, Host, McpServer};
+use crate::prefs::{self, Backend, Host, McpServer};
 use crate::widgets::{self, Group, Page};
-use crate::{hub, models, paths, store, theme, tools, transfer, util, voice, window};
+use crate::{hf, hub, models, paths, store, theme, tools, transfer, util, voice, window};
 
 /// The choices for a chat that outgrows its context.
 pub const OVERFLOW: &[(&str, &str)] =
@@ -17,6 +17,8 @@ pub const OVERFLOW: &[(&str, &str)] =
 pub fn build(page: &Page) {
     this_window(page);
     connection(page);
+    local_server_settings(page);
+    hugging_face(page);
     chat_defaults(page);
     tools_group(page);
     web_search(page);
@@ -28,6 +30,126 @@ pub fn build(page: &Page) {
     mcp(page);
     keyboard(page);
     data(page);
+}
+
+fn local_server_settings(page: &Page) {
+    if !crate::llama::api::installed() { return; }
+    let g = page.group("Local llama.cpp");
+    let p = prefs::get();
+    let (r, _) = widgets::choice_row(
+        "Models kept loaded",
+        "More loaded models switch faster but use more memory.",
+        widgets::opts(&[("1", "One"), ("2", "Two"), ("4", "Four")]),
+        &p.llama_models_max.to_string(),
+        |v| prefs::update(|p| p.llama_models_max = v.parse().unwrap_or(1)),
+    );
+    g.add(&r);
+    let (r, _) = widgets::choice_row(
+        "Sleep after inactivity",
+        "Unload idle models from memory. The server stays available and reloads a model for the next request.",
+        widgets::opts(&[("-1", "Never"), ("300", "5 minutes"), ("900", "15 minutes"), ("3600", "1 hour")]),
+        &p.llama_idle_seconds.to_string(),
+        |v| prefs::update(|p| p.llama_idle_seconds = v.parse().unwrap_or(-1)),
+    );
+    g.add(&r);
+    let (r, _) = widgets::button_row(
+        "Apply server settings",
+        "Applies loaded model count and idle sleep by restarting the local server. Active chats will be interrupted.",
+        "Apply",
+        |b| {
+            if crate::pulls::active_count() > 0 {
+                window::toast("Wait for model downloads to finish before restarting llama.cpp");
+                return;
+            }
+            if crate::llama::api::service_state().trim() != "active" {
+                window::toast("Settings will apply when llama.cpp starts");
+                return;
+            }
+            b.set_sensitive(false);
+            let b2 = b.clone();
+            crate::cmd::background(|| crate::llama::api::control("restart"), move |result| {
+                b2.set_sensitive(true);
+                match result {
+                    Ok(message) => window::toast(&message),
+                    Err(e) => window::toast(&format!("Couldn't restart llama.cpp: {e:#}")),
+                }
+                models::refresh();
+            });
+        },
+    );
+    g.add(&r);
+}
+
+fn hugging_face(page: &Page) {
+    let g = page.group("Hugging Face");
+    let controls = widgets::hbox(6);
+    let status = widgets::label("", "dim");
+    let connect = gtk::Button::with_label("Connect…");
+    let disconnect = gtk::Button::with_label("Disconnect");
+    let refresh = {
+        let status = status.clone();
+        let disconnect = disconnect.clone();
+        move || {
+            status.set_text(if hf::has_app_token() { "Connected" } else if hf::has_shared_token() {
+                "Using existing Hugging Face login"
+            } else { "Not connected" });
+            disconnect.set_visible(hf::has_app_token());
+        }
+    };
+    refresh();
+    controls.append(&status);
+    controls.append(&connect);
+    controls.append(&disconnect);
+    let r = widgets::row("Account", "A read token grants access to gated models. It may help with rate limits; public downloads are not necessarily faster.", Some(controls.upcast_ref()));
+    g.add(&r);
+    let refresh2 = refresh.clone();
+    connect.connect_clicked(move |_| hugging_face_dialog(refresh2.clone()));
+    disconnect.connect_clicked(move |_| {
+        match hf::remove_app_token() {
+            Ok(()) => { refresh(); window::toast("Hugging Face account disconnected"); },
+            Err(e) => window::toast(&format!("Couldn't remove Hugging Face token: {e:#}")),
+        }
+    });
+}
+
+fn hugging_face_dialog(refresh: impl Fn() + Clone + 'static) {
+    let (dialog, card) = widgets::dialog("Connect to Hugging Face", 460);
+    let hint = widgets::label("Paste a Hugging Face read token. Create one at huggingface.co/settings/tokens. It is stored in a private file for the local llama.cpp service.", "dim");
+    hint.set_wrap(true);
+    card.append(&hint);
+    let token = gtk::Entry::new();
+    token.set_visibility(false);
+    token.set_input_purpose(gtk::InputPurpose::Password);
+    token.set_placeholder_text(Some("hf_…"));
+    card.append(&token);
+    let buttons = widgets::hbox(8);
+    buttons.set_halign(gtk::Align::End);
+    let cancel = gtk::Button::with_label("Cancel");
+    let save = gtk::Button::with_label("Connect");
+    save.add_css_class("suggested-action");
+    buttons.append(&cancel);
+    buttons.append(&save);
+    card.append(&buttons);
+    let d = dialog.clone();
+    cancel.connect_clicked(move |_| d.close());
+    let connect_dialog = dialog.clone();
+    save.connect_clicked(move |button| {
+        let value = token.text().trim().to_string();
+        if value.is_empty() { token.grab_focus(); return; }
+        button.set_sensitive(false);
+        let (button, d, refresh) = (button.clone(), connect_dialog.clone(), refresh.clone());
+        crate::rt::spawn(async move { hf::whoami(&value).await.map(|name| (name, value)) }, move |result| {
+            button.set_sensitive(true);
+            match result {
+                Ok((name, value)) => match hf::save_token(&value) {
+                    Ok(()) => { refresh(); d.close(); window::toast(&format!("Connected to Hugging Face as {name}. Restart llama.cpp to use this token for downloads.")); },
+                    Err(e) => window::toast(&format!("Couldn't save Hugging Face token: {e:#}")),
+                },
+                Err(e) => window::toast(&format!("Hugging Face login failed: {e:#}")),
+            }
+        });
+    });
+    dialog.present();
 }
 
 /// A card with the text above a wide control (text areas, lists).
@@ -205,10 +327,10 @@ fn connection(page: &Page) {
                 }
                 let desc = format!(
                     "<tt>{}</tt>{}",
-                    util::esc(&prefs::normalize_host(&h.url)),
+                    util::esc(&prefs::normalize_host(&h.url, h.backend)),
                     if h.key.is_empty() { "" } else { " · with a key" }
                 );
-                list.append(&widgets::row(&h.name, &desc, Some(controls.upcast_ref())));
+                list.append(&widgets::row(&format!("{} · {}", h.name, if h.backend == Backend::LlamaCpp { "llama.cpp" } else { "Ollama" }), &desc, Some(controls.upcast_ref())));
             }
         })
     };
@@ -217,26 +339,29 @@ fn connection(page: &Page) {
     hub::on(&hub::HOST, &list, move || f2());
     let (r, _) = widgets::button_row(
         "Add a server",
-        "Another computer running Ollama, such as a machine with a bigger GPU.",
+        "Connect to another llama.cpp or Ollama server.",
         "Add…",
-        |_| host_dialog(None, Host { name: String::new(), url: String::new(), key: String::new() }),
+        |_| host_dialog(None, Host { backend: Backend::LlamaCpp, name: String::new(), url: String::new(), key: String::new() }),
     );
     g.add(&r);
     let (r, _) = widgets::button_row("Test the connection", "Check that the server in use answers.", "Test", |b| {
         b.set_sensitive(false);
         let b2 = b.clone();
         let conn = crate::ollama::api::Conn::current();
+        let backend = conn.backend;
         crate::rt::spawn(async move { crate::ollama::api::version(&conn).await }, move |r| {
             b2.set_sensitive(true);
             match r {
-                Ok(v) => window::toast(&format!("Connected to Ollama {v}")),
+                Ok(v) => window::toast(&format!("Connected to {}", if backend == Backend::LlamaCpp { v } else { format!("Ollama {v}") })),
                 Err(e) => window::toast(&crate::ollama::api::short_error(&format!("{e:#}"))),
             }
             models::refresh();
         });
     });
     g.add(&r);
-    if crate::ollama::api::installed() {
+    if prefs::get().host().backend == Backend::LlamaCpp
+        && prefs::normalize_host(&prefs::get().host().url, Backend::LlamaCpp) == "http://127.0.0.1:8080"
+        && crate::llama::api::installed() {
         let controls = widgets::hbox(6);
         let state = widgets::label("", "mono");
         state.add_css_class("dim");
@@ -245,10 +370,33 @@ fn connection(page: &Page) {
             let state = state.clone();
             move || {
                 let s2 = state.clone();
-                crate::cmd::background(crate::ollama::api::service_state, move |s| s2.set_text(&s));
+                crate::cmd::background(crate::llama::api::service_state, move |s| s2.set_text(&s));
             }
         };
         refresh_state();
+        let auto = gtk::Switch::new();
+        auto.set_active(crate::llama::api::service_enabled());
+        let updating = Rc::new(std::cell::Cell::new(false));
+        let updating2 = updating.clone();
+        let rs = refresh_state.clone();
+        auto.connect_active_notify(move |sw| {
+            if updating2.get() { return; }
+            let enabled = sw.is_active();
+            match crate::llama::api::set_service_enabled(enabled) {
+                Ok(()) => {
+                    window::toast(if enabled { "llama.cpp will start at login" } else { "llama.cpp stopped and won't start at login" });
+                    rs();
+                    models::refresh();
+                }
+                Err(e) => {
+                    updating2.set(true);
+                    sw.set_active(!enabled);
+                    updating2.set(false);
+                    window::toast(&format!("Couldn't change llama.cpp service: {e:#}"));
+                }
+            }
+        });
+        g.add(&widgets::row("Run llama.cpp at login", "Also starts it now. Turning this off stops the server; Start below runs it for this session.", Some(auto.upcast_ref())));
         for action in ["start", "stop", "restart"] {
             let b = gtk::Button::with_label(&format!("{}{}", action[..1].to_uppercase(), &action[1..]));
             let rs = refresh_state.clone();
@@ -256,7 +404,7 @@ fn connection(page: &Page) {
                 b.set_sensitive(false);
                 let (b2, rs2) = (b.clone(), rs.clone());
                 crate::cmd::background(
-                    move || crate::ollama::api::control(action),
+                    move || crate::llama::api::control(action),
                     move |r| {
                         b2.set_sensitive(true);
                         match r {
@@ -270,13 +418,16 @@ fn connection(page: &Page) {
             });
             controls.append(&b);
         }
-        g.add(&widgets::row("Ollama on this computer", "Start or stop the local server.", Some(controls.upcast_ref())));
+        g.add(&widgets::row("llama.cpp on this computer", "Local model service, also available to coding tools.", Some(controls.upcast_ref())));
     }
 }
 
 fn host_dialog(index: Option<usize>, h: Host) {
     let (dialog, card) = widgets::dialog(if index.is_some() { "Edit server" } else { "Add a server" }, 460);
     card.append(&widgets::label("Name", "field-label"));
+    card.append(&widgets::label("Backend", "field-label"));
+    let backend = widgets::dropdown(&widgets::opts(&[("llama", "llama.cpp"), ("ollama", "Ollama")]), if h.backend == Backend::LlamaCpp { "llama" } else { "ollama" });
+    card.append(&backend);
     let name = gtk::Entry::new();
     name.set_text(&h.name);
     name.set_placeholder_text(Some("Desktop"));
@@ -284,7 +435,7 @@ fn host_dialog(index: Option<usize>, h: Host) {
     card.append(&widgets::label("Address", "field-label"));
     let url = gtk::Entry::new();
     url.set_text(&h.url);
-    url.set_placeholder_text(Some("192.168.1.20:11434"));
+    url.set_placeholder_text(Some("192.168.1.20:8080"));
     url.add_css_class("mono");
     card.append(&url);
     card.append(&widgets::label("Key (optional)", "field-label"));
@@ -306,6 +457,7 @@ fn host_dialog(index: Option<usize>, h: Host) {
     let d = dialog.clone();
     save.connect_clicked(move |_| {
         let host = Host {
+            backend: if backend.selected() == 0 { Backend::LlamaCpp } else { Backend::Ollama },
             name: if name.text().trim().is_empty() { url.text().trim().to_string() } else { name.text().trim().to_string() },
             url: url.text().trim().to_string(),
             key: key.text().trim().to_string(),
@@ -377,7 +529,7 @@ fn chat_defaults(page: &Page) {
     });
     let (r, _) = widgets::switch_row(
         "Keep the picked model loaded",
-        "The model you pick stays in memory, ready to answer, until you pick another one, in new chats too. Ollama keeps it loaded while this app is closed.",
+        "Preload the picked model for faster replies. Local llama.cpp may unload it after the idle time set above.",
         p.keep_loaded,
         |on| {
             prefs::update(|p| p.keep_loaded = on);
@@ -405,6 +557,7 @@ fn chat_defaults(page: &Page) {
         let t = b.text(&b.start_iter(), &b.end_iter(), false).to_string();
         prefs::update(|p| p.system_prompt = t);
     });
+    if p.host().backend == Backend::Ollama {
     slider_row(
         &g,
         "Temperature",
@@ -414,9 +567,13 @@ fn chat_defaults(page: &Page) {
         2,
         |v| prefs::update(|p| p.temperature = v),
     );
+    slider_row(&g, "Top P", "Limits sampling to the most likely tokens; lower values are more focused.",
+        (0.05, 1.0, 0.05), p.top_p, 2, |v| prefs::update(|p| p.top_p = v));
+    slider_row(&g, "Top K", "Limits sampling to this many likely tokens.",
+        (1.0, 100.0, 1.0), p.top_k as f64, 0, |v| prefs::update(|p| p.top_k = v as i64));
     let (r, _) = widgets::choice_row(
         "Context length",
-        "How much of the conversation the model keeps in mind. More uses more memory.",
+        "How much of the conversation the model keeps in mind. The local llama.cpp server uses this after Apply server settings; more uses more memory.",
         widgets::opts(&[
             ("4096", "4K tokens"),
             ("8192", "8K tokens"),
@@ -429,6 +586,7 @@ fn chat_defaults(page: &Page) {
         |v| prefs::update(|p| p.num_ctx = v.parse().unwrap_or(8192)),
     );
     g.add(&r);
+    }
     let (r, _) = widgets::choice_row(
         "When a chat outgrows its context",
         "Long chats can hold more than the model takes in. Each chat can change this in its own settings.",
@@ -457,7 +615,7 @@ fn chat_defaults(page: &Page) {
         &p.keep_alive,
         |v| prefs::update(|p| p.keep_alive = v),
     );
-    g.add(&r);
+    if p.host().backend == Backend::Ollama { g.add(&r); }
     let (r, _) = widgets::switch_row(
         "Think before answering",
         "Models that can reason show their thinking first. Slower, often better.",

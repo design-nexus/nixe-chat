@@ -1,11 +1,10 @@
 # Chat
 
-A desktop chat client for [Ollama](https://ollama.com), built with GTK 4. It chats with
-local models, lets them use tools such as web search, and has a marketplace for finding
-and downloading models from Hugging Face and the Ollama library. It takes its colors
+A desktop chat client for [PrismML llama.cpp](https://github.com/PrismML-Eng/llama.cpp) and optional [Ollama](https://ollama.com), built with GTK 4. It chats with
+local models, lets them use tools such as web search, and downloads GGUF models from Hugging Face. It takes its colors
 from your [Omarchy](https://omarchy.org) theme and fits a half-screen tile.
 
-Chat talks to an Ollama server (on this computer by default). It doesn't run models itself.
+Chat uses a local llama.cpp service by default. The service keeps running when Chat closes, so coding tools can use its OpenAI compatible API.
 
 ## What it does
 
@@ -63,17 +62,12 @@ Chat talks to an Ollama server (on this computer by default). It doesn't run mod
   - Models without tool support still get web results: the search runs first and the
     results go into the prompt.
 - **Memories:** facts about you that every chat knows.
-- **Knowledge:** collections of documents, embedded with an Ollama embedding model, that
-  chats can answer from.
-- **Models:** what's installed, what's loaded (and how much sits on the GPU), with
-  unload, copy, delete, details and a model's parameters and template. **Create** makes
-  a new model from an installed one with its own system prompt and settings. **Check for
-  updates** compares each model with its registry and updates it in one click; this also
-  happens once a day.
+- **Knowledge:** collections of documents embedded with a model on the selected backend. Existing collections are re-embedded from their saved text when first used with a new backend.
+- **Models:** installed, loaded, and downloading models on the selected server, with load, unload, delete and details. Ollama also offers copy, create, and registry update checks.
 - **Marketplace:**
   - Search Hugging Face GGUF repositories by trending, downloads, likes or date, and
     filter to text, vision or embedding models.
-  - Search the Ollama library and see every tag with its size.
+  - When using Ollama, search its library and see every tag with its size.
   - Each download is marked **Fits GPU**, **Partial offload** or **Too big** for this
     computer, counting the memory for the context length set in Settings, and the best
     fit is marked **Recommended**.
@@ -86,8 +80,7 @@ Chat talks to an Ollama server (on this computer by default). It doesn't run mod
   [Piper](https://github.com/rhasspy/piper). Hands-free mode sends when you stop talking.
 - **Quick ask:** `nixe-chat --quick` opens a small window for one-off questions, optionally
   about the text you've highlighted or copied. **Open in chat** keeps the exchange.
-- **Several servers:** add other computers running Ollama and switch between them from
-  the status bar.
+- **Several servers:** add llama.cpp or Ollama servers and switch between them from the status bar. Chat never starts or stops Ollama.
 - **Import and export:** all chats as one JSON file, and imports from Open WebUI exports.
 
 ### Easy on the battery
@@ -114,7 +107,11 @@ o.window({ title = "^Quick ask$" }, { float = true, center = true, size = { 720,
 To remove it, run the same line with `uninstall.sh` in place of `install.sh`. Add
 `-s -- --purge` to also remove its settings and chat history.
 
-You also need [Ollama](https://ollama.com/download), here or on another computer.
+The installer includes a pinned PrismML llama.cpp CUDA server and installs a user service. In Chat's Connection settings, use **Run llama.cpp at login** to enable it, or **Start** to run it for this session. Ollama is optional.
+### Coding tools
+
+The local server listens on `http://127.0.0.1:8080`. Point an OpenAI compatible client at base URL `http://127.0.0.1:8080/v1`, choose an installed model ID from `GET /v1/models`, and enter any placeholder API key if the client requires one. The service binds to localhost and remains available when Chat is closed. Chat does not change existing coding tool settings.
+
 Optional: `wl-clipboard` (Quick ask with the selection), `grim` and `slurp`
 (screenshots), `poppler` (PDFs), `geoclue` (desktop location), whisper.cpp and Piper
 (voice).

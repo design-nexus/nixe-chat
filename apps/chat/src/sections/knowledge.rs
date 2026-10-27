@@ -129,7 +129,8 @@ fn fill(list: &gtk::Box) {
         let addb = gtk::Button::with_label("Add documents…");
         let (kid, kmodel) = (kb.id, kb.model.clone());
         addb.connect_clicked(move |_| {
-            let m = kmodel.clone();
+            let m = if models::embedding_models().contains(&kmodel) { kmodel.clone() } else { embed_model() };
+            if m.is_empty() { window::toast("Download an embedding model first"); return; }
             widgets::open_files(
                 "Add documents",
                 &[("Text and PDF", &["*.txt", "*.md", "*.pdf", "*.rst", "*.html", "*.csv", "*.json", "*.*"])],
@@ -179,7 +180,7 @@ fn add_documents(kb: i64, model: &str, files: Vec<std::path::PathBuf>) {
                 match rag::embed_all(&conn, &model, &chunks).await {
                     Ok(vecs) => {
                         let pairs: Vec<(String, Vec<f32>)> = chunks.into_iter().zip(vecs).collect();
-                        match store::add_kdoc(kb, &name, &pairs) {
+                        match store::add_kdoc(kb, &name, conn.backend.as_str(), &model, &pairs) {
                             Ok(()) => done += 1,
                             Err(e) => errors.push(format!("{name}: {e}")),
                         }

@@ -431,23 +431,42 @@ fn prepare(p: &Page, model: &str, user_id: i64) -> Prepared {
         .filter_map(|id| {
             kbs.iter()
                 .find(|k| k.id == *id)
-                .map(|k| (k.id, if k.model.is_empty() { pr.embed_model.clone() } else { k.model.clone() }))
+                .map(|k| {
+                    let available = models::embedding_models();
+                    let want = if k.model.is_empty() { &pr.embed_model } else { &k.model };
+                    (k.id, if available.contains(want) { want.clone() } else { available.first().cloned().unwrap_or_default() })
+                })
         })
         .collect();
 
     let pa = &chat.params;
+    let model_defaults = prefs::for_model(model);
+    let local_llama = crate::llama::api::local_service();
     let mut options = json!({
-        "temperature": pa.temperature.unwrap_or(pr.temperature),
-        "top_p": pa.top_p.unwrap_or(pr.top_p),
-        "top_k": pa.top_k.unwrap_or(pr.top_k),
-        "num_ctx": pa.num_ctx.unwrap_or(pr.num_ctx),
+        "temperature": pa.temperature.unwrap_or(if local_llama { model_defaults.temperature } else { pr.temperature }),
+        "top_p": pa.top_p.unwrap_or(if local_llama { model_defaults.top_p } else { pr.top_p }),
+        "top_k": pa.top_k.unwrap_or(if local_llama { model_defaults.top_k } else { pr.top_k }),
+        "num_ctx": context_limit(&chat),
     });
+    if local_llama {
+        options["min_p"] = json!(pa.min_p.unwrap_or(model_defaults.min_p));
+        options["repeat_penalty"] = json!(pa.repeat_penalty.unwrap_or(model_defaults.repeat_penalty));
+    }
     if let Some(seed) = pa.seed {
         options["seed"] = json!(seed);
     }
     let format =
         pa.json.then(|| serde_json::from_str::<Value>(&chat.schema).ok().filter(|v| v.is_object()).unwrap_or(json!("json")));
     let think = can("thinking").then(|| pa.think.unwrap_or(pr.think));
+    let reasoning_choices = crate::llama::reasoning::options(
+        info.as_ref().map(|i| i.reasoning_efforts.as_slice()).unwrap_or(&[]),
+        pr.reasoning_hidden.get(model).map(Vec::as_slice).unwrap_or(&[]),
+    );
+    if pr.host().backend == prefs::Backend::LlamaCpp && think == Some(true) && can("reasoning_effort")
+        && let Some(level) = crate::llama::reasoning::effective(&reasoning_choices, pa.reasoning_effort.as_deref())
+    {
+        options["reasoning_effort"] = json!(level);
+    }
 
     let clipboard = system.contains("{{CLIPBOARD}}").then(|| crate::cmd::output(&["wl-paste", "-n"]).unwrap_or_default());
     let embed_available = models::embedding_models();
@@ -492,7 +511,11 @@ fn prepare(p: &Page, model: &str, user_id: i64) -> Prepared {
 /// How many tokens this chat's model takes in: the chat's context length (or
 /// the default), never more than the model supports.
 pub(crate) fn context_limit(chat: &Chat) -> i64 {
-    let asked = chat.params.num_ctx.unwrap_or(prefs::get().num_ctx);
+    let default = if crate::llama::api::local_service() {
+        crate::llama::presets::runtime_context(&chat.model).unwrap_or_else(|| prefs::for_model(&chat.model).num_ctx)
+    } else { prefs::get().num_ctx };
+    let asked = chat.params.num_ctx.unwrap_or(default);
+    let asked = if crate::llama::api::local_service() { asked.min(default) } else { asked };
     match models::info(&chat.model).and_then(|i| i.context_length) {
         Some(max) if max > 0 => asked.min(max as i64),
         _ => asked,
@@ -594,7 +617,26 @@ async fn run(mut p: Prepared, tx: async_channel::Sender<Event>, cancel: Cancel) 
         let mut found = Vec::new();
         let mut error = None;
         for (kb, model) in &p.knowledge {
-            let pool = store::kchunks(&[*kb]).unwrap_or_default();
+            if model.is_empty() {
+                error = Some("Download an embedding model to use Knowledge with this server".into());
+                continue;
+            }
+            let backend = conn.backend.as_str();
+            match store::missing_vectors(*kb, backend, model) {
+                Ok(missing) if !missing.is_empty() => {
+                    let texts: Vec<String> = missing.iter().map(|(_, text)| text.clone()).collect();
+                    match rag::embed_all(&conn, model, &texts).await {
+                        Ok(vectors) => {
+                            let pairs: Vec<_> = missing.into_iter().map(|(id, _)| id).zip(vectors).collect();
+                            if let Err(e) = store::save_vectors(backend, model, &pairs) { error = Some(format!("{e:#}")); }
+                        }
+                        Err(e) => { error = Some(format!("{e:#}")); continue; }
+                    }
+                }
+                Err(e) => { error = Some(format!("{e:#}")); continue; }
+                _ => {}
+            }
+            let pool = store::kchunks_for(*kb, backend, model).unwrap_or_default();
             match rag::retrieve(&conn, model, &p.rag_query, pool, p.rag_top_k).await {
                 Ok(f) => found.extend(f),
                 Err(e) => error = Some(format!("{e:#}")),
@@ -824,6 +866,7 @@ fn finished(s: &Rc<Stream>) {
         p.composer.set_streaming(false);
     }
     if !others_running {
+        if crate::llama::api::local_service() { models::refresh_running(); }
         let _ = store::touch_chat(s.chat);
         maybe_title(s.chat);
         hub::emit(&hub::CHATS);

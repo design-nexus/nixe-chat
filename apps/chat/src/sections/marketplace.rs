@@ -82,6 +82,18 @@ pub fn build() -> gtk::Widget {
         m2.hf_controls.set_visible(v != "ollama");
         search_now(&m2);
     });
+    src.set_visible(pr.host().backend == prefs::Backend::Ollama);
+    let src2 = src.clone();
+    let market = m.clone();
+    hub::on(&hub::HOST, &src, move || {
+        let ollama = prefs::get().host().backend == prefs::Backend::Ollama;
+        src2.set_visible(ollama);
+        if !ollama {
+            market.source.set(Source::HuggingFace);
+            market.hf_controls.set_visible(true);
+        }
+        search_now(&market);
+    });
     top.append(&src);
     controls.append(&top);
 
@@ -110,12 +122,13 @@ pub fn build() -> gtk::Widget {
     mem_note.add_css_class("mono");
     mem_note.add_css_class("small-text");
     mem_note.set_wrap(true);
+    let estimate_ctx = if crate::llama::api::local_service() { 8192 } else { pr.num_ctx };
     mem_note.set_text(&if mem.vram > 0 {
         format!(
-            "GPU memory {} · RAM {} · estimates assume {} tokens of context",
+            "GPU memory {} · RAM {} · new model estimates use {} tokens of context",
             util::size(mem.vram),
             util::size(mem.ram),
-            util::count(pr.num_ctx as u64)
+            util::count(estimate_ctx as u64)
         )
     } else {
         format!("No dedicated GPU memory found · RAM {} · models run on the CPU", util::size(mem.ram))
@@ -301,26 +314,35 @@ fn pull_button(name: &str) -> gtk::Widget {
     if models::is_installed(name) {
         return widgets::tag("Installed", "accent").upcast();
     }
-    if pulls::is_pulling(name) {
-        let b = gtk::Button::with_label("Downloading…");
-        b.set_sensitive(false);
-        return b.upcast();
-    }
     let b = gtk::Button::with_label("Download");
     b.add_css_class("suggested-action");
     let n = name.to_string();
+    let update = {
+        let b = b.clone();
+        let n = n.clone();
+        move || {
+            if let Some(p) = pulls::all().into_iter().find(|p| p.name == n && p.active()) {
+                b.set_label(&pulls::brief(&p));
+                b.set_sensitive(false);
+            } else {
+                b.set_label("Download");
+                b.set_sensitive(true);
+            }
+        }
+    };
+    update();
+    hub::on(&hub::PULLS, &b, update);
     b.connect_clicked(move |b| {
         pulls::start(&n);
-        b.set_label("Downloading…");
         b.set_sensitive(false);
         crate::window::toast_action(&format!("Downloading {n}"), "Show", || crate::window::navigate("models"));
     });
     b.upcast()
 }
 
-fn fit_tag(size: u64, mem: Memory) -> gtk::Label {
-    let ctx = prefs::get().num_ctx as u64;
-    let fit = hw::fit(size, ctx, mem);
+fn fit_tag(size: u64, ctx: u64, kv: &str, mem: Memory) -> gtk::Label {
+    if size == 0 { return widgets::tag("Size unknown", ""); }
+    let fit = hw::fit_with_kv(size, ctx, kv, mem);
     let t = widgets::tag(
         fit.label(),
         match fit {
@@ -330,9 +352,10 @@ fn fit_tag(size: u64, mem: Memory) -> gtk::Label {
         },
     );
     t.set_tooltip_text(Some(&format!(
-        "Needs about {} with {} tokens of context",
-        util::size(hw::needed(size, ctx)),
-        util::count(ctx)
+        "About {} at {} tokens, {} KV cache",
+        util::size(hw::needed_with_kv(size, ctx, kv)),
+        util::count(ctx),
+        kv.to_uppercase()
     )));
     t
 }
@@ -418,28 +441,35 @@ fn draw_files(m: &Rc<Market>, b: &gtk::Box, repo: &str, d: &hf::Detail) {
         return;
     }
     let mem = m.memory.get();
-    let ctx = prefs::get().num_ctx as u64;
     let pairs: Vec<(String, u64)> = d.files.iter().map(|f| (f.quant.clone(), f.size)).collect();
-    let best = hw::recommend(&pairs, ctx, mem);
+    let settings = |quant: &str| {
+        if crate::llama::api::local_service() { prefs::for_model(&hf_ref(repo, quant)) }
+        else { prefs::ModelSettings { num_ctx: prefs::get().num_ctx, ..Default::default() } }
+    };
+    let best = hw::recommend_with(&pairs, |i, size| {
+        let s = settings(&d.files[i].quant);
+        hw::fit_with_kv(size, s.num_ctx as u64, &s.kv_cache, mem)
+    });
     if let Some(f) = best.and_then(|i| d.files.get(i)) {
-        let fit = hw::fit(f.size, ctx, mem);
+        let s = settings(&f.quant);
+        let fit = hw::fit_with_kv(f.size, s.num_ctx as u64, &s.kv_cache, mem);
         let why = match fit {
-            Fit::Gpu => "the best quality that fits in GPU memory",
-            _ => "the best quality this computer can run, partly on the CPU",
+            Fit::Gpu => "estimated to fit in GPU memory",
+            _ => "estimated to fit with some CPU offload",
         };
         let row = widgets::row(
             &format!("Recommended: {}", f.quant),
             &format!("<tt>{}</tt> · {why}.", util::size(f.size)),
-            Some(&pull_button(&hf::ollama_ref(repo, &f.quant))),
+            Some(&pull_button(&hf_ref(repo, &f.quant))),
         );
         row.add_css_class("quant-row");
         row.add_css_class("recommended");
         b.append(&row);
-    } else if !d.files.is_empty() {
-        b.append(&widgets::banner("None of these fit comfortably in this computer's memory.", true));
+    } else if d.files.iter().all(|f| f.size > 0) {
+        b.append(&widgets::banner("These files may exceed available memory at the estimated context size. You can still download them.", true));
     }
     for (i, f) in d.files.iter().enumerate() {
-        let name = hf::ollama_ref(repo, &f.quant);
+        let name = hf_ref(repo, &f.quant);
         let row = widgets::hbox(10);
         row.add_css_class("settings-option");
         row.add_css_class("quant-row");
@@ -453,7 +483,8 @@ fn draw_files(m: &Rc<Market>, b: &gtk::Box, repo: &str, d: &hf::Detail) {
         row.append(&s);
         let tags = widgets::hbox(6);
         tags.set_hexpand(true);
-        tags.append(&fit_tag(f.size, mem));
+        let s = settings(&f.quant);
+        tags.append(&fit_tag(f.size, s.num_ctx as u64, &s.kv_cache, mem));
         if Some(i) == best {
             tags.append(&widgets::tag("Recommended", "accent"));
             row.add_css_class("recommended");
@@ -468,6 +499,14 @@ fn draw_files(m: &Rc<Market>, b: &gtk::Box, repo: &str, d: &hf::Detail) {
     let note = widgets::label("Q4_K_M is a good balance of size and quality; Q8_0 is close to the original.", "dim");
     note.add_css_class("small-text");
     b.append(&note);
+}
+
+fn hf_ref(repo: &str, quant: &str) -> String {
+    if prefs::get().host().backend == prefs::Backend::LlamaCpp {
+        format!("{repo}:{quant}")
+    } else {
+        hf::ollama_ref(repo, quant)
+    }
 }
 
 fn ollama_card(m: &Rc<Market>, e: library::Entry) -> gtk::Widget {
@@ -567,7 +606,7 @@ fn draw_tags(m: &Rc<Market>, b: &gtk::Box, model: &str, tags: &[library::Tag]) {
         tagbox.set_hexpand(true);
         let bytes = parse_size(&t.size);
         if bytes > 0 {
-            tagbox.append(&fit_tag(bytes, mem));
+            tagbox.append(&fit_tag(bytes, ctx, "f16", mem));
         }
         if !t.context.is_empty() {
             tagbox.append(&widgets::tag(&format!("{} context", t.context), ""));

@@ -431,7 +431,7 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
     let hosts = gtk::DropDown::from_strings(&[]);
     widgets::ellipsize(&hosts);
     hosts.add_css_class("host-switcher");
-    hosts.set_tooltip_text(Some("Ollama server"));
+    hosts.set_tooltip_text(Some("Model server"));
     bar.append(&hosts);
     let fill_hosts = {
         let hosts = hosts.clone();
@@ -492,7 +492,7 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
                 text.push_str(&format!(" · ↓{downloads}"));
             }
             readout.set_text(&text);
-            let url = crate::prefs::normalize_host(&host.url);
+            let url = crate::prefs::normalize_host(&host.url, host.backend);
             readout.set_tooltip_text(Some(&url));
             hosts.set_tooltip_text(Some(&url));
         }
@@ -656,8 +656,17 @@ fn install_keys(window: &gtk::ApplicationWindow, search: &gtk::SearchEntry) {
 
 pub fn switch_host(i: usize) {
     prefs::update(|p| p.active_host = i);
+    if let Some(ui) = ui() {
+        let current = ui.borrow().current;
+        for id in ["models", "marketplace", "knowledge"] {
+            if let Some(page) = ui.borrow_mut().pages.remove(id) {
+                ui.borrow().stack.remove(&page);
+            }
+        }
+        if matches!(current, "models" | "marketplace" | "knowledge") { go(current, false); }
+    }
     hub::emit(&hub::HOST);
-    models::refresh();
+    models::switch_host();
 }
 
 /// The sidebar shows only icons: hide everything marked `compact-hide` and

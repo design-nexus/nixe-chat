@@ -1583,6 +1583,21 @@ window.chat-window menubutton.tool-button > button:checked {
   color: @theme_danger;
 }
 
+window.chat-window menubutton.reasoning-level > button {
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: @theme_dim_text;
+  font-size: 0.82em;
+}
+
+window.chat-window menubutton.reasoning-level > button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
 levelbar.ctx-bar > trough {
   min-height: 4px;
 }
