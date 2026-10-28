@@ -1,5 +1,8 @@
-//! The main window: a top bar, a sidebar with the pages and the chat list, a
-//! stack of pages built the first time they're shown, and a status bar.
+//! The main window: the header (the app and the chat or page, the sidebar toggle; on the
+//! chat page the model picker in the middle and the chat's actions at the end; then the
+//! chat search, the temporary-chat toggle and settings), a sidebar with the pages, the
+//! chat list and the model server at its foot, and a stack of pages built the first time
+//! they're shown.
 
 use gtk::prelude::*;
 use nyx_ui::chrome;
@@ -23,8 +26,10 @@ struct Ui {
     history: Vec<&'static str>,
     overlay: gtk::Overlay,
     search: gtk::SearchEntry,
-    /// The page's description in the status bar (or the chat's live readout).
-    status_note: gtk::Label,
+    header: chrome::AppHeader,
+    /// The chat page's parts of the header, shown only on it: the chat list button
+    /// (narrow windows), the model picker, and the chat's actions.
+    chat_parts: [gtk::Box; 3],
 }
 
 type NarrowHook = Box<dyn Fn(bool)>;
@@ -125,10 +130,6 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
         navigate("chat");
     }
     navigate(&start);
-    if let Some(out) = std::env::var_os("CHAT_SNAPSHOT") {
-        snapshot_and_quit(app, std::path::PathBuf::from(out));
-        return;
-    }
     if let Some(ui) = ui() {
         ui.borrow().window.present();
     }
@@ -161,7 +162,7 @@ fn install_icons() {
     }
 }
 
-fn nav_button(icon: &str, title: &str) -> (gtk::Button, gtk::Box) {
+fn nav_button(icon: &str, title: &str, description: &str) -> (gtk::Button, gtk::Box) {
     let button = gtk::Button::new();
     button.add_css_class("nav-item");
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
@@ -172,7 +173,7 @@ fn nav_button(icon: &str, title: &str) -> (gtk::Button, gtk::Box) {
     l.add_css_class("compact-hide");
     content.append(&l);
     button.set_child(Some(&content));
-    button.set_tooltip_text(Some(title));
+    button.set_tooltip_text(Some(if description.is_empty() { title } else { description }));
     (button, content)
 }
 
@@ -201,7 +202,7 @@ pub fn nav_group(title: &str, first: bool, add: NavAdd<'_>) -> gtk::Box {
 }
 
 fn build(app: &gtk::Application) {
-    let window = gtk::ApplicationWindow::builder().application(app).title("Chat").default_width(1120).default_height(800).build();
+    let window = gtk::ApplicationWindow::builder().application(app).title("Chat").default_width(1280).default_height(800).build();
     window.add_css_class("chat-window");
     // No client-side titlebar: Hyprland manages the window.
     window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
@@ -223,7 +224,7 @@ fn build(app: &gtk::Application) {
             list.append(&nav_group(s.group, last_group.is_empty(), None));
             last_group = s.group;
         }
-        let (button, content) = nav_button(s.icon, s.title);
+        let (button, content) = nav_button(s.icon, s.title, s.description);
         if s.id == "models" {
             // Active downloads.
             let r = widgets::label("", "nav-readout");
@@ -251,15 +252,8 @@ fn build(app: &gtk::Application) {
         .vexpand(true)
         .child(&list)
         .build();
-    let head = chrome::sidebar_head("Chat", Some("Search chats (Ctrl+F)"));
-    head.toggle.connect_clicked(|_| toggle_sidebar());
-    if let Some(find) = &head.search {
-        find.connect_clicked(|_| open_search());
-    }
-    nav.append(&head.root);
-    search.add_css_class("sidebar-search");
-    nav.append(&search);
     nav.append(&nav_scroll);
+    nav.append(&server_foot());
 
     // ----- Content -----
     let stack = gtk::Stack::new();
@@ -274,11 +268,27 @@ fn build(app: &gtk::Application) {
     body.append(&nav);
     body.append(&stack);
 
-    let (status, status_note) = status_bar();
+    // ----- Header -----
+    // The app and the chat or page, the sidebar toggle; on the chat page its model
+    // picker in the middle and its actions at the end; then the chat search, the
+    // temporary-chat toggle and Settings.
+    let header = chrome::app_header(&window, "chat-message-new-symbolic", "Chat");
+    let collapse = widgets::bar_button("sidebar-show-symbolic", "Collapse the sidebar (Ctrl+B)");
+    collapse.connect_clicked(|_| toggle_sidebar());
+    header.start.append(&collapse);
+    let chat_parts = [widgets::hbox(2), widgets::hbox(0), widgets::hbox(2)];
+    header.start.append(&chat_parts[0]);
+    header.center.append(&chat_parts[1]);
+    header.end.set_spacing(4);
+    chat_parts[2].set_margin_end(4);
+    header.end.append(&chat_parts[2]);
+    header.end.append(&search);
+    header.end.append(&temp_toggle());
+    header.end.append(&chrome::settings_button(settings_dialog::open));
     let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
     frame.add_css_class("window-frame");
+    frame.append(&header.root);
     frame.append(&body);
-    frame.append(&status);
 
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&frame));
@@ -325,31 +335,35 @@ fn build(app: &gtk::Application) {
         history: Vec::new(),
         overlay,
         search,
-        status_note,
+        header,
+        chat_parts,
     };
     UI.with(|u| *u.borrow_mut() = Some(Rc::new(RefCell::new(ui))));
 }
 
-/// The chat search, at the top of the sidebar: hidden until Ctrl+F or the
-/// sidebar's search button.
+/// The search's natural width in characters, in a full window and a narrow one. Its
+/// minimum stays small, so the header still fits a half-screen tile.
+const SEARCH_WIDE: i32 = 16;
+const SEARCH_NARROW: i32 = 14;
+
+/// The chat search, always in the header; the chats it finds list in the sidebar.
 fn search_entry() -> gtk::SearchEntry {
     let search = gtk::SearchEntry::new();
-    search.set_placeholder_text(Some("Search chats"));
-    search.set_visible(false);
-    search.connect_stop_search(|e| {
-        e.set_text("");
-        e.set_visible(false);
-    });
+    search.set_placeholder_text(Some("Search chats  (Ctrl+F)"));
+    search.add_css_class("bar-search");
+    search.set_width_chars(8);
+    search.set_max_width_chars(SEARCH_WIDE);
+    search.update_property(&[gtk::accessible::Property::Label("Search chats")]);
+    search.connect_stop_search(|e| e.set_text(""));
     search
 }
 
-/// Temporary chat: not saved. Its toggle sits in the status bar.
+/// Temporary chat: not saved. Its toggle sits in the header.
 fn temp_toggle() -> gtk::ToggleButton {
     let temp = gtk::ToggleButton::new();
     temp.set_icon_name("view-conceal-symbolic");
     temp.add_css_class("flat");
     temp.add_css_class("bar-button");
-    temp.add_css_class("status-action");
     temp.add_css_class("temp-toggle");
     temp.set_valign(gtk::Align::Center);
     temp.set_tooltip_text(Some("Temporary chat: not saved (Ctrl+Shift+N)"));
@@ -392,45 +406,34 @@ fn open_search() {
         return;
     }
     let s = ui.borrow().search.clone();
-    if s.is_visible() && s.text().is_empty() && s.has_focus() {
-        s.set_visible(false);
-    } else {
-        s.set_visible(true);
-        s.grab_focus();
-    }
+    s.grab_focus();
 }
 
-/// The bar along the bottom: the shortcuts on the left, then the page's note,
-/// and the server on the right.
-fn status_bar() -> (gtk::Box, gtk::Label) {
-    let bar = gtk::Box::new(gtk::Orientation::Horizontal, 16);
-    bar.add_css_class("status-bar");
-    let help = gtk::Button::new();
-    help.add_css_class("status-help");
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-    content.append(&widgets::label("F1", "status-key"));
-    content.append(&widgets::label("Shortcuts", ""));
-    help.set_child(Some(&content));
-    help.set_tooltip_text(Some("Show the keyboard shortcuts"));
-    help.connect_clicked(|_| show_shortcuts());
-    bar.append(&help);
-
-    let note = widgets::label("", "status-note");
-    note.set_hexpand(true);
-    note.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    bar.append(&note);
+/// The model server, at the sidebar's foot: its dot, what it has, and the switcher
+/// when there are several. The icon-only sidebar keeps the dot.
+fn server_foot() -> gtk::Box {
+    let bar = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    bar.add_css_class("server-foot");
+    let line = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    bar.append(&line);
 
     let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     dot.add_css_class("status-dot");
     dot.set_valign(gtk::Align::Center);
-    bar.append(&dot);
-    let readout = widgets::label("Connecting…", "status-readout");
-    readout.set_ellipsize(gtk::pango::EllipsizeMode::Start);
-    bar.append(&readout);
+    line.append(&dot);
+    let readout = widgets::label("Connecting…", "server-readout");
+    readout.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    readout.set_max_width_chars(22);
+    readout.set_hexpand(true);
+    readout.set_xalign(0.0);
+    readout.add_css_class("compact-hide");
+    line.append(&readout);
 
     let hosts = gtk::DropDown::from_strings(&[]);
-    widgets::ellipsize(&hosts);
+    widgets::ellipsize_to(&hosts, 18);
+    hosts.set_halign(gtk::Align::Start);
     hosts.add_css_class("host-switcher");
+    HOST_SWITCH.with(|h| *h.borrow_mut() = Some(hosts.clone()));
     hosts.set_tooltip_text(Some("Model server"));
     bar.append(&hosts);
     let fill_hosts = {
@@ -453,7 +456,7 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
             if hosts.selected() != selected {
                 hosts.set_selected(selected);
             }
-            hosts.set_visible(names.len() > 1);
+            hosts.set_visible(names.len() > 1 && !NAV_COMPACT.with(|c| c.get()));
         }
     };
     fill_hosts();
@@ -471,19 +474,20 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
         move || {
             let p = prefs::get();
             let host = p.host();
-            // With several servers the dropdown names the server.
-            let name = if p.hosts.len() > 1 { String::new() } else { format!("{} · ", host.name) };
+            // The state first, so a narrow foot still shows it; with several servers
+            // the dropdown names the server.
+            let name = if p.hosts.len() > 1 { String::new() } else { format!(" · {}", host.name) };
             dot.remove_css_class("on");
             dot.remove_css_class("off");
             let mut text = match models::online() {
                 Some(true) => {
                     dot.add_css_class("on");
                     let n = models::installed().len();
-                    format!("{name}{n} model{}", if n == 1 { "" } else { "s" })
+                    format!("{n} model{}", if n == 1 { "" } else { "s" })
                 }
                 Some(false) => {
                     dot.add_css_class("off");
-                    format!("{name}offline")
+                    "Offline".to_string()
                 }
                 None => "Connecting…".to_string(),
             };
@@ -491,6 +495,7 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
             if downloads > 0 {
                 text.push_str(&format!(" · ↓{downloads}"));
             }
+            text.push_str(&name);
             readout.set_text(&text);
             let url = crate::prefs::normalize_host(&host.url, host.backend);
             readout.set_tooltip_text(Some(&url));
@@ -503,9 +508,14 @@ fn status_bar() -> (gtk::Box, gtk::Label) {
     let r = refresh.clone();
     hub::on(&hub::PULLS, &dot, r);
     hub::on(&hub::HOST, &bar, refresh);
-    bar.append(&temp_toggle());
-    bar.append(&chrome::gear(settings_dialog::open));
-    (bar, note)
+    bar
+}
+
+thread_local! {
+    /// The sidebar shows only icons.
+    static NAV_COMPACT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The model-server switcher at the sidebar's foot.
+    static HOST_SWITCH: RefCell<Option<gtk::DropDown>> = const { RefCell::new(None) };
 }
 
 /// Every keyboard shortcut, for the F1 list and Settings → Keyboard.
@@ -633,9 +643,9 @@ fn install_keys(window: &gtk::ApplicationWindow, search: &gtk::SearchEntry) {
                 }
                 done
             }
-            gdk::Key::Escape if s2.is_visible() && (s2.has_focus() || s2.focus_child().is_some() || !s2.text().is_empty()) => {
+            gdk::Key::Escape if s2.has_focus() || s2.focus_child().is_some() || !s2.text().is_empty() => {
                 s2.set_text("");
-                s2.set_visible(false);
+                gtk::prelude::GtkWindowExt::set_focus(&w2, None::<&gtk::Widget>);
                 done
             }
             _ => glib::Propagation::Proceed,
@@ -672,13 +682,7 @@ pub fn switch_host(i: usize) {
 /// The sidebar shows only icons: hide everything marked `compact-hide` and
 /// centre the icons.
 fn apply_compact(nav: &gtk::Box, compact: bool) {
-    if let Some(head) = nav.first_child().and_downcast::<gtk::Box>() {
-        chrome::set_head_compact(&head, compact);
-        // The icon-only sidebar has no room for the search; Ctrl+F opens the history instead.
-        if compact && let Some(search) = head.next_sibling().and_downcast::<gtk::SearchEntry>() {
-            search.set_visible(false);
-        }
-    }
+    NAV_COMPACT.with(|c| c.set(compact));
     if compact {
         nav.add_css_class("compact");
     } else {
@@ -700,6 +704,11 @@ fn apply_compact(nav: &gtk::Box, compact: bool) {
         }
     }
     walk(nav.upcast_ref(), compact);
+    HOST_SWITCH.with(|h| {
+        if let Some(h) = h.borrow().as_ref() {
+            h.set_visible(prefs::get().hosts.len() > 1 && !compact);
+        }
+    });
 }
 
 /// Fit the layout to the window's width. The wide layout must stay narrower
@@ -743,6 +752,7 @@ pub fn toggle_sidebar() {
 fn set_narrow(narrow: bool) {
     NARROW.with(|n| n.set(narrow));
     let Some(ui) = ui() else { return };
+    ui.borrow().search.set_max_width_chars(if narrow { SEARCH_NARROW } else { SEARCH_WIDE });
     for page in ui.borrow().pages.values() {
         mark_page(page, narrow);
     }
@@ -819,9 +829,11 @@ fn go(id: &str, record: bool) {
     }
     u.stack.set_visible_child_name(id);
     u.current = id;
+    for part in &u.chat_parts {
+        part.set_visible(id == "chat");
+    }
     drop(u);
     refresh_crumb();
-    refresh_note();
 }
 
 /// The window title: the open chat's title on the chat page, else the page's name.
@@ -834,19 +846,16 @@ pub fn refresh_crumb() {
         u.sections.iter().find(|s| s.id == u.current).map(|s| s.title.to_string()).unwrap_or_default()
     };
     chrome::set_title(&u.window, "Chat", &title);
+    u.header.set_subtitle(&title);
 }
 
-/// The status bar's middle: the chat's live readout on the chat page, the
-/// page's description elsewhere.
-pub fn refresh_note() {
+/// The chat page puts its chat list button, model picker and actions in the header.
+pub fn set_chat_header(start: &gtk::Box, picker: &impl IsA<gtk::Widget>, actions: &gtk::Box) {
     let Some(ui) = ui() else { return };
     let u = ui.borrow();
-    let text = if u.current == "chat" {
-        sections::chat::status_text()
-    } else {
-        u.sections.iter().find(|s| s.id == u.current).map(|s| s.description.to_string()).unwrap_or_default()
-    };
-    u.status_note.set_text(&text);
+    u.chat_parts[0].append(start);
+    u.chat_parts[1].append(picker);
+    u.chat_parts[2].append(actions);
 }
 
 thread_local! {
@@ -909,101 +918,5 @@ fn show_toast(message: &str, action: ToastAction<'_>) {
         if bx.parent().is_some() {
             overlay.remove_overlay(&bx);
         }
-    });
-}
-
-fn snapshot_and_quit(app: &gtk::Application, out: std::path::PathBuf) {
-    let Some(ui) = ui() else { return };
-    let window = ui.borrow().window.clone();
-    // Developer aids for checking a whole flow without clicking:
-    // CHAT_SNAPSHOT_COMPARE=model answers alongside a second model,
-    // CHAT_SNAPSHOT_SEND="question" sends it, CHAT_SNAPSHOT_REPO=user/repo
-    // opens a Marketplace page, CHAT_SNAPSHOT_PULL=name starts a download.
-    if let Ok(model) = std::env::var("CHAT_SNAPSHOT_COMPARE") {
-        sections::chat::set_compare(vec![model]);
-    }
-    if let Ok(text) = std::env::var("CHAT_SNAPSHOT_SEND") {
-        glib::timeout_add_local_once(std::time::Duration::from_millis(1200), move || sections::chat::send_text(&text));
-    }
-    if let Ok(name) = std::env::var("CHAT_SNAPSHOT_PULL") {
-        crate::pulls::start(&name);
-    }
-    if let Ok(repo) = std::env::var("CHAT_SNAPSHOT_REPO") {
-        sections::marketplace::open_repo(&repo);
-    }
-    snapshot_window(app, window.upcast_ref(), out);
-}
-
-fn report_wide(w: &gtk::Widget, limit: i32) {
-    if !w.is_visible() {
-        return;
-    }
-    let (min, _, _, _) = w.measure(gtk::Orientation::Horizontal, -1);
-    if min <= limit {
-        return;
-    }
-    let mut child = w.first_child();
-    let mut any = false;
-    while let Some(c) = child {
-        let (cm, _, _, _) = c.measure(gtk::Orientation::Horizontal, -1);
-        if c.is_visible() && cm > limit {
-            any = true;
-            report_wide(&c, limit);
-        }
-        child = c.next_sibling();
-    }
-    if !any {
-        let text = w.downcast_ref::<gtk::Label>().map(|l| l.text().to_string()).unwrap_or_default();
-        let mut path = Vec::new();
-        let mut cur = Some(w.clone());
-        while let Some(x) = cur {
-            let c = x.css_classes().join(".");
-            if !c.is_empty() {
-                path.push(c);
-            }
-            if path.len() >= 4 {
-                break;
-            }
-            cur = x.parent();
-        }
-        println!("WIDE {} min {min} [{}] {:?}", w.type_().name(), path.join(" < "), crate::util::clip(&text, 60));
-    }
-}
-
-/// Render `window` to a PNG (invisibly) after a delay, then quit.
-pub fn snapshot_window(app: &gtk::Application, window: &gtk::Window, out: std::path::PathBuf) {
-    window.set_opacity(0.01);
-    window.set_title(Some("Chat snapshot"));
-    window.set_default_size(
-        std::env::var("CHAT_SNAPSHOT_W").ok().and_then(|v| v.parse().ok()).unwrap_or(1180),
-        std::env::var("CHAT_SNAPSHOT_H").ok().and_then(|v| v.parse().ok()).unwrap_or(820),
-    );
-    window.present();
-    let (app, window) = (app.clone(), window.clone());
-    let delay = std::env::var("CHAT_SNAPSHOT_DELAY").ok().and_then(|v| v.parse().ok()).unwrap_or(2500);
-    glib::timeout_add_local_once(std::time::Duration::from_millis(delay), move || {
-        // CHAT_DEBUG_WIDTH=px lists the innermost widgets that need more width
-        // than that, which is what makes a page wider than the window.
-        if let Some(limit) = std::env::var("CHAT_DEBUG_WIDTH").ok().and_then(|v| v.parse::<i32>().ok())
-            && let Some(child) = window.child()
-        {
-            println!("WINDOW MIN {}", child.measure(gtk::Orientation::Horizontal, -1).0);
-            report_wide(&child, limit);
-        }
-        if let Some(child) = window.child() {
-            let paintable = gtk::WidgetPaintable::new(Some(&child));
-            let (w, h) = (child.width(), child.height());
-            let snapshot = gtk::Snapshot::new();
-            snapshot.append_color(&gdk::RGBA::BLACK, &gtk::graphene::Rect::new(0.0, 0.0, w as f32, h as f32));
-            paintable.snapshot(&snapshot, w as f64, h as f64);
-            if let (Some(node), Some(renderer)) = (snapshot.to_node(), window.renderer()) {
-                let texture = renderer.render_texture(node, None);
-                match texture.save_to_png(&out) {
-                    Ok(()) => println!("snapshot {w}x{h} -> {}", out.display()),
-                    Err(e) => eprintln!("snapshot failed: {e}"),
-                }
-            }
-        }
-        app.quit();
     });
 }

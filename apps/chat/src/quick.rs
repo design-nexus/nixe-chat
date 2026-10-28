@@ -126,7 +126,6 @@ pub fn open(app: &gtk::Application, context: Option<String>) {
     let (s2, ob) = (scroll.clone(), open_btn.clone());
     let go = Rc::new(move || ask(&q2, &s2, &ob));
     let g2 = go.clone();
-    let go2 = go.clone();
     input.connect_activate(move |_| g2());
     send.connect_clicked(move |_| go());
     let q2 = q.clone();
@@ -164,15 +163,6 @@ pub fn open(app: &gtk::Application, context: Option<String>) {
         glib::Propagation::Proceed
     });
     QUICK.with(|qq| *qq.borrow_mut() = Some(window.clone()));
-    if let Some(out) = std::env::var_os("CHAT_SNAPSHOT") {
-        if let Ok(text) = std::env::var("CHAT_SNAPSHOT_SEND") {
-            input.set_text(&text);
-            let g = go2.clone();
-            glib::timeout_add_local_once(std::time::Duration::from_millis(800), move || g());
-        }
-        crate::window::snapshot_window(app, &window, out.into());
-        return;
-    }
     window.present();
     input.grab_focus();
 }

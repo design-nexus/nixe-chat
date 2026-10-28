@@ -10,7 +10,7 @@ pub use nyx_ui::settings_card::{escape, fit, focus_search, is_open};
 
 /// Each settings group's icon and one-line summary in the dialog's list.
 const GROUPS: &[(&str, &str, &str)] = &[
-    ("Chat window", "applications-graphics-symbolic", "Theme, glow, motion"),
+    ("Chat window", "applications-graphics-symbolic", "Theme, accent, motion"),
     ("Connection", "network-server-symbolic", "Model servers"),
     ("Chat defaults", "user-available-symbolic", "Model, prompt, sending"),
     ("Tools", "applications-utilities-symbolic", "What models can use"),

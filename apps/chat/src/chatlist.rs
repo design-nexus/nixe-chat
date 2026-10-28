@@ -181,6 +181,8 @@ fn fill(list: &gtk::Box, query: &str) {
 fn empty_note(text: &str) -> gtk::Label {
     let l = widgets::label(text, "chat-list-empty");
     l.set_wrap(true);
+    // A wrapping label asks for its whole line; this keeps the sidebar narrow.
+    l.set_max_width_chars(24);
     l
 }
 

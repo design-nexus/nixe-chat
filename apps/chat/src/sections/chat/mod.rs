@@ -85,19 +85,6 @@ pub fn title() -> String {
     page().map(|p| p.st.borrow().chat().title.clone()).filter(|t| !t.is_empty()).unwrap_or_else(|| "New chat".into())
 }
 
-/// The status bar's readout on the chat page: the model and the last reply's
-/// speed. How full the context is shows in the message bar.
-pub fn status_text() -> String {
-    let Some(p) = page() else { return String::new() };
-    let st = p.st.borrow();
-    let mut parts = vec![crate::util::model_label(&st.chat().model)];
-    let path = store::path_to(&st.all, st.chat().leaf);
-    if let Some(m) = path.iter().rev().find(|m| m.role == "assistant" && m.tps > 0.0) {
-        parts.push(format!("{:.0} tok/s", m.tps));
-    }
-    parts.join(" · ")
-}
-
 /// 3.1k, 8k, 128k.
 pub(crate) fn short_count(n: u64) -> String {
     if n < 1000 {
@@ -126,18 +113,12 @@ pub fn build() -> gtk::Widget {
     let root = widgets::vbox(0);
     root.add_css_class("chat-page");
 
-    // ----- Toolbar -----
-    // The model picker on the left, the chat's actions on the right.
-    // The model picker centred; the chat list button (narrow windows) at the
-    // start and the chat's actions at the end, as one row of equal buttons.
-    let header = gtk::CenterBox::new();
-    header.add_css_class("toolbar");
-    header.add_css_class("chat-header");
+    // ----- In the window's header -----
+    // The model picker in the middle; the chat list button (narrow windows) at the
+    // start and the chat's actions at the end, beside the window's own buttons.
     let start = widgets::hbox(2);
     let end = widgets::hbox(2);
-    end.set_halign(gtk::Align::End);
-    header.set_start_widget(Some(&start));
-    header.set_end_widget(Some(&end));
+    end.add_css_class("chat-actions");
     let history_btn = gtk::MenuButton::new();
     history_btn.set_icon_name("view-list-symbolic");
     history_btn.add_css_class("tool-button");
@@ -171,9 +152,9 @@ pub fn build() -> gtk::Widget {
     let picker = gtk::Overlay::new();
     picker.set_valign(gtk::Align::Center);
     let model_dd = gtk::DropDown::from_strings(&[]);
-    widgets::ellipsize(&model_dd);
     model_dd.add_css_class("model-picker");
     model_dd.set_enable_search(true);
+    widgets::ellipsize_to(&model_dd, 22);
     model_dd.set_tooltip_text(Some("Model"));
     picker.set_child(Some(&model_dd));
     // Shows whether the model is in memory: pulsing while it loads, full once loaded.
@@ -183,12 +164,14 @@ pub fn build() -> gtk::Widget {
     load_bar.set_valign(gtk::Align::End);
     load_bar.set_can_target(false);
     picker.add_overlay(&load_bar);
-    header.set_center_widget(Some(&picker));
 
+    // The model's capabilities beside the picker, centred with it.
     let caps = widgets::hbox(4);
     caps.add_css_class("caps");
     caps.set_valign(gtk::Align::Center);
-    end.append(&caps);
+    let middle = widgets::hbox(8);
+    middle.append(&picker);
+    middle.append(&caps);
 
     let compare_btn = gtk::MenuButton::new();
     compare_btn.set_icon_name("list-add-symbolic");
@@ -219,7 +202,7 @@ pub fn build() -> gtk::Widget {
         }
     });
     end.append(&more);
-    root.append(&header);
+    window::set_chat_header(&start, &middle, &end);
 
     let banners = widgets::vbox(0);
     banners.add_css_class("chat-banners");
@@ -574,9 +557,16 @@ pub(crate) fn refresh_header(p: &Page) {
     p.model_dd.set_sensitive(!list.is_empty());
     widgets::clear(&p.caps);
     if let Some(info) = models::info(&model) {
-        for (cap, label) in [("vision", "Vision"), ("tools", "Tools"), ("thinking", "Thinking")] {
+        for (cap, icon, tip) in [
+            ("vision", "view-reveal-symbolic", "Vision: this model can read images"),
+            ("tools", "applications-engineering-symbolic", "Tools: this model can call tools"),
+            ("thinking", "emoji-objects-symbolic", "Thinking: this model can reason before answering"),
+        ] {
             if info.has(cap) {
-                p.caps.append(&widgets::tag(label, ""));
+                let img = gtk::Image::from_icon_name(icon);
+                img.add_css_class("cap-icon");
+                img.set_tooltip_text(Some(tip));
+                p.caps.append(&img);
             }
         }
     }
@@ -592,7 +582,7 @@ pub(crate) fn refresh_header(p: &Page) {
     window::set_temporary_toggle(p.st.borrow().chat().temporary);
 }
 
-/// The context meter and the status bar readout, after a reply or a switch.
+/// The context meter, after a reply or a switch.
 pub(crate) fn refresh_context(p: &Page) {
     let (limit, used) = {
         let st = p.st.borrow();
@@ -600,7 +590,6 @@ pub(crate) fn refresh_context(p: &Page) {
         (send::context_limit(st.chat()), send::context_used(&path))
     };
     p.composer.set_context(used.filter(|_| limit > 0).map(|u| (u, limit as u64)));
-    window::refresh_note();
 }
 
 /// The bar under the picker: pulsing while the model loads, full when it's
@@ -892,15 +881,7 @@ pub fn screenshot() {
     }
 }
 
-/// Answer with these models too (the snapshot check uses this).
-pub fn set_compare(models: Vec<String>) {
-    if let Some(p) = page() {
-        p.st.borrow_mut().chat_mut().compare = models;
-        refresh_header(&p);
-    }
-}
-
-/// Send a message as if typed (the snapshot check uses this).
+/// Send a message as if typed (the CHAT_AUTOSEND developer aid uses this).
 pub fn send_text(text: &str) {
     if let Some(p) = page() {
         p.composer.insert_prompt(text);

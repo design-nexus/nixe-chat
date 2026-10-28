@@ -160,22 +160,28 @@ pub fn dropdown(options: &[(String, String)], current: &str) -> gtk::DropDown {
 /// A closed drop-down shortens its text with an ellipsis instead of growing to
 /// its longest option; the open list shows every option in full.
 pub fn ellipsize(dd: &gtk::DropDown) {
-    dd.set_factory(Some(&string_factory(true)));
-    dd.set_list_factory(Some(&string_factory(false)));
-    // Typing to search matches the text.
-    dd.set_expression(Some(gtk::PropertyExpression::new(gtk::StringObject::static_type(), None::<gtk::Expression>, "string")));
+    ellipsize_to(dd, 30);
 }
 
-/// Labels for a drop-down of strings; `short` ones ellipsize.
-fn string_factory(short: bool) -> gtk::SignalListItemFactory {
+/// As [`ellipsize`], with the closed text at most `max_chars` wide.
+pub fn ellipsize_to(dd: &gtk::DropDown, max_chars: i32) {
+    // Typing to search matches the text. Set first: setting it can bring back the
+    // default factory.
+    dd.set_expression(Some(gtk::PropertyExpression::new(gtk::StringObject::static_type(), None::<gtk::Expression>, "string")));
+    dd.set_factory(Some(&string_factory(Some(max_chars))));
+    dd.set_list_factory(Some(&string_factory(None)));
+}
+
+/// Labels for a drop-down of strings; with a `max_chars`, they ellipsize there.
+fn string_factory(max_chars: Option<i32>) -> gtk::SignalListItemFactory {
     let f = gtk::SignalListItemFactory::new();
     f.connect_setup(move |_, item| {
         let l = gtk::Label::new(None);
         l.set_xalign(0.0);
-        if short {
+        if let Some(max) = max_chars {
             l.set_ellipsize(pango::EllipsizeMode::End);
             l.set_width_chars(6);
-            l.set_max_width_chars(30);
+            l.set_max_width_chars(max);
         }
         if let Some(item) = item.downcast_ref::<gtk::ListItem>() {
             item.set_child(Some(&l));

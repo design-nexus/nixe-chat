@@ -50,12 +50,23 @@ pub struct Composer {
     syncing: Cell<bool>,
 }
 
+/// The message bar's buttons: all one square size.
+const BAR_BUTTON: i32 = 34;
+
+/// Give a message-bar button its square size, centred in the row.
+fn square(w: &impl IsA<gtk::Widget>) {
+    w.set_size_request(BAR_BUTTON, BAR_BUTTON);
+    w.set_halign(gtk::Align::Center);
+    w.set_valign(gtk::Align::Center);
+}
+
 /// A compact on/off icon button for the message bar.
 fn chip(icon: &str, tip: &str) -> gtk::ToggleButton {
     let b = gtk::ToggleButton::new();
     b.set_icon_name(icon);
     b.add_css_class("bar-toggle");
     b.set_tooltip_text(Some(tip));
+    square(&b);
     b
 }
 
@@ -112,14 +123,16 @@ impl Composer {
         attach.add_css_class("flat");
         attach.add_css_class("bar-toggle");
         attach.set_tooltip_text(Some("Attach images or files"));
+        square(&attach);
         row.append(&attach);
         let shot = gtk::Button::from_icon_name("camera-photo-symbolic");
         shot.add_css_class("flat");
         shot.add_css_class("bar-toggle");
         shot.set_tooltip_text(Some("Attach a screenshot of an area (Ctrl+Shift+S)"));
+        square(&shot);
         row.append(&shot);
 
-        let chips = widgets::hbox(2);
+        let chips = widgets::hbox(6);
         chips.set_hexpand(true);
         let web = chip("web-browser-symbolic", "Web search");
         let location = chip("mark-location-symbolic", "Location: let the model ask where you are");
@@ -128,10 +141,12 @@ impl Composer {
         tools_btn.set_icon_name("applications-engineering-symbolic");
         tools_btn.add_css_class("bar-menu");
         tools_btn.set_tooltip_text(Some("Tools for this chat"));
+        square(&tools_btn);
         let kb_btn = gtk::MenuButton::new();
         kb_btn.set_icon_name("accessories-dictionary-symbolic");
         kb_btn.add_css_class("bar-menu");
         kb_btn.set_tooltip_text(Some("Knowledge: answer from your documents (#)"));
+        square(&kb_btn);
         for w in [
             web.upcast_ref::<gtk::Widget>(),
             location.upcast_ref(),
@@ -172,11 +187,13 @@ impl Composer {
         mic.add_css_class("flat");
         mic.add_css_class("bar-toggle");
         mic.set_tooltip_text(Some("Dictate (Ctrl+Space)"));
+        square(&mic);
         row.append(&mic);
         let send = gtk::Button::from_icon_name("go-up-symbolic");
         send.add_css_class("suggested-action");
         send.add_css_class("send-button");
         send.set_tooltip_text(Some("Send (Enter)"));
+        square(&send);
         row.append(&send);
         frame.append(&row);
 
@@ -683,7 +700,7 @@ impl Composer {
             chip.append(&l);
             if let Some(f) = &a.file {
                 let n = widgets::label(&format!("{}k", f.chars / 1000), "dim");
-                n.add_css_class("mono");
+                n.add_css_class("tnum");
                 n.add_css_class("small-text");
                 chip.append(&n);
             }

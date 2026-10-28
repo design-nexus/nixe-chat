@@ -27,7 +27,7 @@ fn tile(title: &str, value: &str, sub: &str) -> gtk::Box {
     b.add_css_class("stat-tile");
     b.append(&widgets::label(&title.to_uppercase(), "stat-title"));
     let v = widgets::label(value, "stat-value");
-    v.add_css_class("mono");
+    v.add_css_class("tnum");
     b.append(&v);
     if !sub.is_empty() {
         b.append(&widgets::label(sub, "stat-sub"));
@@ -84,7 +84,7 @@ fn fill(body: &gtk::Box) {
         name.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
         head.append(&name);
         let speed = widgets::label(&format!("{:.1} tok/s", m.avg_tps), "value-readout");
-        speed.add_css_class("mono");
+        speed.add_css_class("tnum");
         speed.set_xalign(1.0);
         head.append(&speed);
         row.append(&head);
@@ -99,7 +99,7 @@ fn fill(body: &gtk::Box) {
             &format!("{} repl{} · {} tokens", m.replies, if m.replies == 1 { "y" } else { "ies" }, util::count(m.tokens as u64)),
             "settings-option-description",
         );
-        d.add_css_class("mono");
+        d.add_css_class("tnum");
         row.append(&d);
         g.append(&row);
     }
@@ -119,7 +119,7 @@ fn graph_card(title: &str, sub: &str, data: Vec<(i64, f64)>, compact_numbers: bo
         &format!("{} · {sub}", if compact_numbers { util::count(total as u64) } else { format!("{total:.0}") }),
         "dim",
     );
-    s.add_css_class("mono");
+    s.add_css_class("tnum");
     head.append(&s);
     card.append(&head);
     let area = gtk::DrawingArea::new();

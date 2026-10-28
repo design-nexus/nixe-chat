@@ -43,7 +43,7 @@ impl Live {
         spinner.start();
         head.append(&spinner);
         let stats = widgets::label("", "msg-stats");
-        stats.add_css_class("mono");
+        stats.add_css_class("tnum");
         head.append(&stats);
         root.append(&head);
         let body = widgets::vbox(10);

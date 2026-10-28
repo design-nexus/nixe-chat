@@ -1,108 +1,73 @@
-.settings-navigation.compact button.nav-item {
-  min-width: 40px;
+
+
+/* Chat on Nyx 2.0: only Chat's own parts. One surface: the header, the sidebar, the
+   chat and the side panel share the window's background; cards and spacing, not
+   lines, separate them. Buttons, inputs, popovers, banners, dialogs, tables and the
+   sidebar come from the shared sheets. */
+
+/* ---------- Header ---------- */
+
+.header-status {
+  font-size: 11.5px;
+  color: @theme_dim_text;
+  font-feature-settings: "tnum";
+}
+
+window.chat-window .app-header button.bar-button,
+window.chat-window .app-header togglebutton.bar-button {
+  min-width: 32px;
+  min-height: 32px;
   padding: 0;
-}
-
-.settings-navigation.compact .nav-group {
-  /* Just the hairline, across the column. */
-  min-width: 12px;
-  margin: 8px -6px;
-  padding: 0;
-  min-height: 0;
-  font-size: 0;
-}
-
-.settings-navigation.compact .nav-group.first {
-  border-top: none;
-  margin: 0;
-}
-
-.settings-navigation button.nav-item {
-  min-height: 42px;
-  padding: 0 12px;
-  margin: 1px 0;
-  border-radius: 6px;
-  border: none;
+  border-radius: var(--nyx-radius-small);
+  border-color: transparent;
   background: transparent;
   box-shadow: none;
-  color: @theme_text;
-  font-weight: 500;
-  transition: background 150ms ease-out, color 150ms ease-out;
+  color: @theme_dim_text;
 }
 
-.settings-navigation button.nav-item:hover {
+window.chat-window .app-header button.bar-button:hover {
   background: @row_hover;
+  color: @theme_text;
 }
 
-.settings-navigation button.nav-item.active {
-  background: @nav_active;
-  box-shadow: none;
+/* The icon-only sidebar hides its group labels itself. The shared sheet's
+   font-size: 0 for them can stick after the sidebar expands again. */
+.settings-navigation .nav-group-label,
+.settings-navigation.compact .nav-group-label {
+  font-size: 11px;
 }
 
-/* ---------- Search ---------- */
-
-entry.settings-search,
-searchbar entry,
-entry.settings-search > text {
-  min-height: 36px;
+/* The model server, at the sidebar's foot: its dot, models and switcher. */
+.server-foot {
+  min-height: 40px;
+  padding: 4px 12px 10px;
 }
 
-/* A dialog's bold title. */
+.server-readout {
+  font-size: 11.5px;
+  color: @theme_dim_text;
+  font-feature-settings: "tnum";
+}
+
+window.chat-window .server-foot dropdown.host-switcher > button {
+  min-width: 0;
+  min-height: 26px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 11.5px;
+  color: @theme_dim_text;
+}
+
+window.chat-window .server-foot dropdown.host-switcher > button:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
 .dialog-card .dialog-title {
   font-size: 1.3em;
-  font-weight: 700;
-  color: @theme_text;
-}
-
-/* ---------- Buttons ---------- */
-
-window.chat-window button {
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: 6px;
-  background: transparent;
-  border: 1px solid @hairline;
-  box-shadow: none;
-  color: @theme_text;
-  transition: background 150ms ease-out, border-color 150ms ease-out;
-}
-
-window.chat-window button:hover {
-  background: @row_hover;
-}
-
-window.chat-window button:active {
-  background: alpha(@theme_accent, 0.22);
-}
-
-window.chat-window button.suggested-action {
-  background: @nav_active;
-  border-color: transparent;
-  color: @theme_text;
   font-weight: 600;
-}
-
-window.chat-window button.suggested-action image {
-  color: @theme_accent;
-}
-
-window.chat-window button.suggested-action:hover {
-  background: mix(@theme_bg, @theme_accent, 0.26);
-}
-
-window.chat-window button.destructive-action {
-  background: alpha(@theme_danger, 0.12);
-  border-color: alpha(@theme_danger, 0.55);
-  color: @theme_danger;
-}
-
-window.chat-window button.flat {
-  background: transparent;
-  border-color: transparent;
-}
-
-window.chat-window button.flat:hover {
-  background: @row_hover;
+  color: @theme_text;
 }
 
 window.chat-window menubutton.flat > button,
@@ -133,142 +98,41 @@ window.chat-window button.reset-button {
   color: @theme_dim_text;
 }
 
-window.chat-window button.chip {
-  min-height: 28px;
-  padding: 0 12px;
-  border-radius: 6px;
-  font-size: 0.9em;
-}
-
-window.chat-window button.chip.selected {
-  background: @nav_active;
-  border-color: transparent;
-  color: @theme_text;
-}
-
-/* ---------- Inputs ---------- */
-
-window.chat-window entry,
-window.chat-window spinbutton {
-  min-height: 32px;
-  border-radius: 6px;
-  background: transparent;
-  border: 1px solid @hairline;
-  box-shadow: none;
-  color: @theme_text;
-}
-
-window.chat-window entry:focus-within,
-window.chat-window spinbutton:focus-within {
-  border-color: @theme_accent;
-  box-shadow: none;
-}
-
 window.chat-window dropdown > button {
   min-width: 160px;
-}
-
-window.chat-window popover > contents {
-  background: @theme_surface;
-  border: 1px solid @hairline;
-  border-radius: 10px;
-  color: @theme_text;
-  padding: 4px;
-}
-
-window.chat-window popover listview > row,
-window.chat-window popover list > row {
-  border-radius: 6px;
-  padding: 6px 10px;
-  color: @theme_text;
-}
-
-window.chat-window scale > trough > slider,
-window.chat-window scale.marks-before > trough > slider,
-window.chat-window scale.marks-after > trough > slider {
-  -gtk-icon-source: none;
-  background-image: none;
-  min-width: 16px;
-  min-height: 16px;
-  margin: -7px;
-  border-radius: 999px;
-  background: @theme_text;
-  border: 2px solid @theme_accent;
-}
-
-window.chat-window scrollbar slider {
-  min-width: 6px;
-  border-radius: 999px;
-  background: alpha(@theme_muted, 0.9);
 }
 
 /* ---------- Theme swatches ---------- */
 
 .theme-card {
   padding: 0;
-  border-radius: 10px;
-  border: 1px solid @hairline;
-  background: transparent;
+  border-radius: var(--nyx-radius-card);
+  border: none;
+  background: @theme_card;
 }
 
 .theme-card.selected {
-  border-color: @theme_accent;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.6);
 }
 
 .theme-card picture {
   border-radius: 9px 9px 0 0;
 }
 
-/* ---------- Banners and dialogs ---------- */
-
-.banner {
-  padding: 12px 16px;
-  border-radius: 10px;
-  background: alpha(@theme_accent, 0.12);
-  border: 1px solid alpha(@theme_accent, 0.45);
-  margin-bottom: 14px;
-}
-
-.banner.warning {
-  background: alpha(@theme_danger, 0.1);
-  border-color: alpha(@theme_danger, 0.45);
-}
-
-/* Buttons on a banner are its action: a solid accent, so they stand out on the tint. */
-window.chat-window .banner button {
-  background: @theme_accent;
-  border-color: @theme_accent;
-  color: @theme_on_accent;
-  font-weight: 600;
-}
-
-window.chat-window .banner button:hover {
-  background: mix(@theme_accent, @theme_text, 0.12);
-}
-
-window.chat-window .banner.warning button {
-  background: @theme_danger;
-  border-color: @theme_danger;
-}
-
-window.chat-window .banner.warning button:hover {
-  background: mix(@theme_danger, @theme_text, 0.12);
-}
-
 .toast {
-  /* Above the status bar (and the message bar on the chat page). */
+  /* Above the message bar on the chat page. */
   margin: 18px 18px 56px;
   padding: 10px 16px;
-  border-radius: 10px;
+  border-radius: var(--nyx-radius-card);
   background: @theme_surface;
-  border: 1px solid @hairline;
+  border: none;
 }
 
 window.chat-window button.toast-action {
   min-height: 28px;
   margin: -4px -8px -4px 0;
   padding: 0 12px;
-  font-weight: 700;
+  font-weight: 600;
   color: @theme_accent;
 }
 
@@ -276,82 +140,27 @@ window.chat-window button.toast-action:hover {
   background: alpha(@theme_accent, 0.14);
 }
 
-.dialog-card {
-  background: @theme_bg;
-  border: 1px solid @hairline;
-  border-radius: 14px;
-  padding: 24px;
-}
-
-.key-cap {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.85em;
-  padding: 2px 7px;
-  border-radius: 4px;
-  background: alpha(@theme_muted, 0.55);
-  border: 1px solid @hairline;
-}
-
 /* ---------- Tables ---------- */
 
-/* A page's toolbar sits on a hairline above its table. */
+/* A page's toolbar, above its table. */
 .toolbar,
 .list-toolbar {
   min-height: 46px;
   margin: 0;
   padding: 0 12px 0 14px;
   background: transparent;
-  border-bottom: 1px solid @hairline;
 }
 
-/* A line of help above a list, on the same hairline as a toolbar. */
+/* A line of help above a list. */
 .page-hint {
   padding: 12px 14px;
-  border-bottom: 1px solid @hairline;
   color: @theme_dim_text;
-}
-
-window.chat-window columnview > header > button {
-  min-height: 34px;
-  padding: 0 16px;
-  border-radius: 0;
-  border: none;
-  border-left: 1px solid @hairline;
-  background: transparent;
-  color: @theme_dim_text;
-}
-
-window.chat-window columnview > header > button:first-child {
-  border-left: none;
-}
-
-window.chat-window columnview > header,
-window.chat-window columnview > header > button,
-window.chat-window columnview > header > button > box {
-  font-size: 1em;
 }
 
 window.chat-window columnview > header > button > box > label {
   font-size: 0.86em;
   font-weight: 500;
   color: @theme_dim_text;
-}
-
-window.chat-window columnview > header > button:hover {
-  background: @row_hover;
-  color: @theme_text;
-}
-
-window.chat-window columnview > listview > row {
-  border-radius: 0;
-  margin: 0;
-  min-height: 35px;
-}
-
-window.chat-window columnview > listview > row:selected {
-  background: @nav_active;
-  box-shadow: none;
-  color: @theme_text;
 }
 
 .cell-dim {
@@ -397,58 +206,6 @@ window.chat-window list.table-card > row:selected {
   box-shadow: none;
 }
 
-window.chat-window .segmented button.segment {
-  min-height: 28px;
-  padding: 0 12px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: alpha(@theme_text, 0.78);
-  font-weight: 600;
-  box-shadow: none;
-}
-
-window.chat-window .segmented button.segment:hover {
-  background: @row_hover;
-  color: @theme_text;
-}
-
-window.chat-window .segmented button.segment:checked {
-  background: @nav_active;
-  color: @theme_text;
-}
-
-.settings-dialog {
-  background: @theme_bg;
-  border: 1px solid @hairline;
-  border-radius: 14px;
-}
-
-window.chat-window button.dialog-nav {
-  min-height: 0;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-}
-
-window.chat-window button.dialog-nav image {
-  margin-top: 2px;
-  color: @theme_dim_text;
-}
-
-window.chat-window button.dialog-nav:hover {
-  background: @row_hover;
-}
-
-window.chat-window button.dialog-nav.active {
-  background: @lift_active;
-}
-
-window.chat-window button.dialog-nav.active image {
-  color: @theme_accent;
-}
-
 .dialog-title {
   font-size: 1.2em;
   font-weight: 600;
@@ -458,7 +215,7 @@ window.chat-window button.live-pill {
   min-height: 24px;
   padding: 0 10px;
   font-size: 0.8em;
-  font-weight: 700;
+  font-weight: 600;
   color: @theme_dim_text;
 }
 
@@ -472,27 +229,26 @@ window.chat-window button.live-pill.paused {
 
 window.chat-window button.stat-tile {
   padding: 12px 14px 10px;
-  border-radius: 10px;
-  background: transparent;
-  border: 1px solid @hairline;
+  border-radius: var(--nyx-radius-card);
+  border: none;
   min-width: 150px;
+  background: @theme_card;
 }
 
 window.chat-window button.stat-tile:hover {
-  background: @row_hover;
-  border-color: alpha(@theme_accent, 0.55);
+  background: mix(@theme_card, @theme_text, 0.04);
 }
 
 .stat-title {
   font-size: 0.76em;
-  font-weight: 800;
-  letter-spacing: 1.6px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: @theme_dim_text;
 }
 
 .stat-value {
   font-size: 1.5em;
-  font-weight: 800;
+  font-weight: 600;
   color: @theme_text;
 }
 
@@ -504,14 +260,14 @@ window.chat-window button.stat-tile:hover {
 /* ---------- Graphs ---------- */
 
 .graph-card {
-  background: mix(@theme_bg, @theme_surface, 0.5);
-  border: 1px solid @hairline;
-  border-radius: 6px;
+  border: none;
+  border-radius: var(--nyx-radius-small);
   padding: 14px 16px;
+  background: @theme_card;
 }
 
 .graph-card-title {
-  font-weight: 700;
+  font-weight: 600;
   color: @theme_text;
 }
 
@@ -525,7 +281,7 @@ window.chat-window button.stat-tile:hover {
 
 .legend-value {
   color: @theme_text;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .legend-swatch {
@@ -561,23 +317,23 @@ window.chat-window button.stat-tile:hover {
 .graph-tip {
   font-size: 0.8em;
   padding: 5px 9px;
-  border-radius: 6px;
+  border-radius: var(--nyx-radius-small);
   background: @theme_surface;
-  border: 1px solid @hairline;
+  border: none;
   color: @theme_text;
 }
 
 .core-cell {
-  background: mix(@theme_bg, @theme_surface, 0.5);
-  border: 1px solid @hairline;
-  border-radius: 6px;
+  border: none;
+  border-radius: var(--nyx-radius-small);
   padding: 6px 8px 4px;
   min-width: 96px;
+  background: @theme_card;
 }
 
 .core-cell .core-name {
   font-size: 0.74em;
-  font-weight: 700;
+  font-weight: 600;
   color: @theme_dim_text;
 }
 
@@ -590,34 +346,14 @@ window.chat-window button.stat-tile:hover {
 
 .kv-key {
   font-size: 0.78em;
-  font-weight: 700;
+  font-weight: 600;
   color: @theme_dim_text;
 }
 
 .kv-value {
   font-size: 1.05em;
-  font-weight: 700;
+  font-weight: 600;
   color: @theme_text;
-}
-
-/* ---------- Usage bars ---------- */
-
-window.chat-window levelbar > trough {
-  min-height: 6px;
-  border-radius: 999px;
-  background: alpha(@theme_muted, 0.8);
-  border: none;
-  padding: 0;
-}
-
-window.chat-window levelbar > trough > block {
-  min-height: 6px;
-  border-radius: 999px;
-  border: none;
-}
-
-window.chat-window levelbar > trough > block.filled {
-  background: @theme_accent;
 }
 
 window.chat-window levelbar > trough > block.filled.hot {
@@ -632,14 +368,14 @@ window.chat-window levelbar > trough > block.empty {
 .composition {
   min-height: 10px;
   border-radius: 999px;
-  background: alpha(@theme_muted, 0.8);
+  background: @track;
 }
 
 .legend-key {
   min-width: 10px;
   min-height: 10px;
   border-radius: 3px;
-  background: alpha(@theme_muted, 0.8);
+  background: @track;
 }
 
 .legend-key.part-used { background: @theme_accent; }
@@ -655,19 +391,20 @@ window.chat-window levelbar > trough > block.empty {
 
 .cell-hot {
   color: @theme_accent;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .details-panel {
   margin-top: 10px;
-  border: 1px solid @hairline;
-  border-radius: 10px;
+  border: none;
+  border-radius: var(--nyx-radius-card);
   padding: 12px 16px;
+  background: @theme_card;
 }
 
 .details-title {
   font-size: 1.1em;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 window.chat-window list.service-list {
@@ -691,7 +428,7 @@ window.chat-window list.service-list > row {
 .field-label {
   margin-top: 4px;
   font-size: 0.82em;
-  font-weight: 700;
+  font-weight: 600;
   color: @theme_dim_text;
 }
 
@@ -699,7 +436,7 @@ window.chat-window button.tiny {
   min-height: 24px;
   min-width: 24px;
   padding: 0 4px;
-  border-radius: 6px;
+  border-radius: var(--nyx-radius-small);
 }
 
 window.chat-window button.small {
@@ -723,16 +460,16 @@ window.chat-window button.chip.selected image {
 
 /* Segmented control */
 .segmented {
-  background: transparent;
-  border: 1px solid @hairline;
-  border-radius: 6px;
+  border: none;
+  border-radius: var(--nyx-radius-small);
   padding: 2px;
+  background: @field;
 }
 
 window.chat-window .segmented > button {
   min-height: 28px;
   padding: 0 12px;
-  border-radius: 6px;
+  border-radius: var(--nyx-radius-small);
   border: none;
   background: transparent;
   font-weight: 600;
@@ -744,19 +481,20 @@ window.chat-window .segmented > button:hover {
 }
 
 window.chat-window .segmented > button.selected {
-  background: @nav_active;
+  background: @theme_raised;
+  box-shadow: 0 1px 3px alpha(@theme_shadow, 0.3);
   color: @theme_text;
 }
 
 /* Text areas */
 .text-area-frame {
-  border-radius: 6px;
-  background: transparent;
-  border: 1px solid @hairline;
+  border-radius: var(--nyx-radius-small);
+  border: none;
+  background: @theme_card;
 }
 
 .text-area-frame:focus-within {
-  border-color: @theme_accent;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.6);
 }
 
 textview.text-area,
@@ -772,7 +510,7 @@ window.chat-window popover.menu > contents {
 
 window.chat-window button.menu-row {
   min-height: 32px;
-  border-radius: 6px;
+  border-radius: var(--nyx-radius-small);
   font-weight: 500;
 }
 
@@ -783,8 +521,8 @@ window.chat-window button.menu-row:hover {
 .menu-heading-small {
   margin: 8px 10px 4px;
   font-size: 0.72em;
-  font-weight: 700;
-  letter-spacing: 1.6px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: alpha(@theme_dim_text, 0.85);
 }
 
@@ -825,7 +563,7 @@ window.chat-window .nav-group button.nav-add:hover {
 window.chat-window button.chat-item {
   min-height: 32px;
   padding: 0 10px;
-  border-radius: 6px;
+  border-radius: var(--nyx-radius-small);
   border: none;
   background: transparent;
   box-shadow: none;
@@ -908,26 +646,10 @@ window.chat-window button.archive-toggle {
   background: @theme_danger;
 }
 
-/* The server switcher sits in the status bar, as quiet as its text. */
-window.chat-window .status-bar dropdown.host-switcher > button {
-  min-width: 0;
-  min-height: 24px;
-  padding: 0 8px;
-  border-color: transparent;
-  color: @theme_dim_text;
-}
-
-window.chat-window .status-bar dropdown.host-switcher > button:hover {
-  color: @theme_text;
-}
-
-.status-note {
-  color: @theme_dim_text;
-}
-
 /* ---------- Chat page ---------- */
 
 window.chat-window dropdown.model-picker > button {
+  min-width: 0;
   min-height: 30px;
 }
 
@@ -945,7 +667,6 @@ window.chat-window dropdown.model-picker > button {
 
 .chat-footer {
   background: @theme_bg;
-  border-top: 1px solid @hairline;
   padding: 12px 0 0;
 }
 
@@ -977,7 +698,6 @@ window.chat-window button.recent-row {
   min-height: 38px;
   padding: 0 14px;
   border-radius: 0;
-  border-top: 1px solid @divider;
   font-weight: 500;
 }
 
@@ -1006,19 +726,19 @@ window.chat-window button.jump-bottom {
   padding: 0;
   border-radius: 999px;
   background: @theme_surface;
-  border: 1px solid @hairline;
+  border: none;
 }
 
 /* User messages */
 .user-msg {
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--nyx-radius-card);
   background: @lift;
-  border: 1px solid @hairline;
+  border: none;
 }
 
 .user-msg.editing {
-  border-color: @theme_accent;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.6);
 }
 
 .user-text {
@@ -1027,13 +747,14 @@ window.chat-window button.jump-bottom {
 
 .file-chip {
   padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid @hairline;
+  border-radius: var(--nyx-radius-small);
+  border: none;
   font-size: 0.86em;
+  background: @theme_card;
 }
 
 .thumb {
-  border-radius: 10px;
+  border-radius: var(--nyx-radius-card);
 }
 
 window.chat-window button.thumb-btn {
@@ -1065,9 +786,9 @@ window.chat-window button.thumb-btn {
 .compare-row > .assistant-msg,
 .live-box > .assistant-msg {
   padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid @hairline;
-  background: transparent;
+  border-radius: var(--nyx-radius-card);
+  border: none;
+  background: @theme_card;
 }
 
 .live-box > .assistant-msg:only-child {
@@ -1077,12 +798,12 @@ window.chat-window button.thumb-btn {
 }
 
 .compare-row > .assistant-msg.selected {
-  border-color: @theme_accent;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.6);
 }
 
 .model-name {
   font-size: 0.82em;
-  font-weight: 700;
+  font-weight: 600;
   color: @theme_dim_text;
 }
 
@@ -1115,7 +836,7 @@ window.chat-window button.source-chip {
   border-radius: 999px;
   font-size: 0.82em;
   background: alpha(@theme_muted, 0.32);
-  border: 1px solid @hairline;
+  border: none;
 }
 
 window.chat-window button.source-chip label {
@@ -1154,13 +875,13 @@ window.chat-window button.disclosure:hover {
 
 /* Tool calls */
 .tool-card {
-  border-radius: 6px;
-  border: 1px solid @hairline;
-  background: transparent;
+  border-radius: var(--nyx-radius-small);
+  border: none;
+  background: @theme_card;
 }
 
 .tool-card.failed {
-  border-color: alpha(@theme_danger, 0.45);
+  background: mix(@theme_card, @theme_danger, 0.1);
 }
 
 window.chat-window button.tool-head {
@@ -1168,7 +889,7 @@ window.chat-window button.tool-head {
   padding: 0 10px;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--nyx-radius-small);
 }
 
 window.chat-window button.tool-head image {
@@ -1176,7 +897,7 @@ window.chat-window button.tool-head image {
 }
 
 .tool-title {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .tool-summary {
@@ -1195,13 +916,13 @@ window.chat-window button.tool-head image {
 
 .approval {
   padding: 12px 16px;
-  border-radius: 10px;
+  border-radius: var(--nyx-radius-card);
   background: alpha(@theme_accent, 0.12);
-  border: 1px solid alpha(@theme_accent, 0.45);
+  border: none;
 }
 
 .approval-title {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* ---------- Markdown ---------- */
@@ -1219,15 +940,14 @@ window.chat-window button.tool-head image {
   line-height: 1.45;
 }
 
-.md-h1 { font-size: 1.45em; font-weight: 800; margin-top: 6px; }
-.md-h2 { font-size: 1.25em; font-weight: 800; margin-top: 6px; }
-.md-h3 { font-size: 1.1em; font-weight: 700; margin-top: 4px; }
-.md-h4 { font-weight: 700; }
+.md-h1 { font-size: 1.45em; font-weight: 600; margin-top: 6px; }
+.md-h2 { font-size: 1.25em; font-weight: 600; margin-top: 6px; }
+.md-h3 { font-size: 1.1em; font-weight: 600; margin-top: 4px; }
+.md-h4 { font-weight: 600; }
 
 .md-marker {
   min-width: 16px;
   color: @theme_dim_text;
-  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
   font-feature-settings: "tnum";
 }
 
@@ -1241,14 +961,13 @@ window.chat-window button.tool-head image {
 }
 
 .md-code {
-  border-radius: 10px;
-  background: alpha(@theme_shadow, 0.35);
-  border: 1px solid @hairline;
+  border-radius: var(--nyx-radius-card);
+  border: none;
+  background: @theme_card;
 }
 
 .md-code-head {
   padding: 2px 6px 2px 12px;
-  border-bottom: 1px solid @hairline;
   font-size: 0.82em;
 }
 
@@ -1258,13 +977,13 @@ window.chat-window button.tool-head image {
 }
 
 .md-table {
-  border: 1px solid @hairline;
-  border-radius: 6px;
+  border: none;
+  border-radius: var(--nyx-radius-small);
+  background: @theme_card;
 }
 
 .md-cell {
   padding: 6px 10px;
-  border-bottom: 1px solid @hairline;
 }
 
 .md-cell.head {
@@ -1291,14 +1010,14 @@ window.chat-window button.tool-head image {
 
 .composer {
   padding: 10px 10px 8px 14px;
-  border-radius: 10px;
-  background: transparent;
-  border: 1px solid @hairline;
-  transition: border-color 150ms ease-out;
+  border-radius: var(--nyx-radius-card);
+  border: none;
+  transition: box-shadow 120ms ease-out;
+  background: @theme_card;
 }
 
 .composer:focus-within {
-  border-color: @theme_accent;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.5);
 }
 
 textview.composer-text,
@@ -1316,11 +1035,39 @@ textview.composer-text > text {
   margin-top: 2px;
 }
 
+/* Send: round, but tinted like an active message-bar toggle rather than a bright fill. */
 window.chat-window button.send-button {
   min-width: 34px;
   min-height: 34px;
   padding: 0;
   border-radius: 999px;
+  border: none;
+  box-shadow: none;
+  background: alpha(@theme_accent, 0.16);
+  background-image: none;
+  color: @theme_accent;
+}
+
+window.chat-window button.send-button:hover {
+  background: alpha(@theme_accent, 0.24);
+}
+
+window.chat-window button.send-button:active {
+  background: alpha(@theme_accent, 0.30);
+}
+
+window.chat-window button.send-button.destructive-action {
+  background: alpha(@theme_danger, 0.16);
+  color: @theme_danger;
+}
+
+window.chat-window button.send-button.destructive-action:hover {
+  background: alpha(@theme_danger, 0.24);
+}
+
+window.chat-window button.send-button:disabled {
+  background: transparent;
+  color: @theme_dim_text;
 }
 
 window.chat-window button.recording {
@@ -1341,9 +1088,9 @@ window.chat-window button.recording {
 
 .attach-chip {
   padding: 4px 4px 4px 6px;
-  border-radius: 10px;
-  background: alpha(@theme_bg, 0.6);
-  border: 1px solid @hairline;
+  border-radius: var(--nyx-radius-card);
+  border: none;
+  background: @theme_card;
 }
 
 .suggest-row {
@@ -1355,7 +1102,6 @@ window.chat-window button.recording {
 .side-panel {
   min-width: 320px;
   background: @theme_bg;
-  border-left: 1px solid @hairline;
 }
 
 .panel-body,
@@ -1369,14 +1115,14 @@ window.chat-window button.recording {
 
 .panel-title {
   font-size: 1.1em;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .panel-heading {
   margin-top: 14px;
   font-size: 0.72em;
-  font-weight: 800;
-  letter-spacing: 1.6px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: @theme_dim_text;
 }
 
@@ -1390,7 +1136,7 @@ window.chat-window button.recording {
 }
 
 .artifact-picture {
-  border-radius: 10px;
+  border-radius: var(--nyx-radius-card);
   background: alpha(@theme_bg, 0.5);
 }
 
@@ -1398,14 +1144,14 @@ window.chat-window button.recording {
 
 .json-view {
   padding: 10px 12px;
-  border-radius: 10px;
-  background: alpha(@theme_shadow, 0.25);
-  border: 1px solid @hairline;
+  border-radius: var(--nyx-radius-card);
+  border: none;
+  background: @theme_card;
 }
 
 .json-badge {
   font-size: 0.8em;
-  font-weight: 700;
+  font-weight: 600;
   color: @theme_accent;
 }
 
@@ -1429,19 +1175,18 @@ window.chat-window button.recording {
 
 window.chat-window button.market-card {
   padding: 12px 14px;
-  border-radius: 6px;
-  background: transparent;
-  border: 1px solid @hairline;
+  border-radius: var(--nyx-radius-small);
+  border: none;
+  background: @theme_card;
 }
 
 window.chat-window button.market-card:hover {
-  border-color: @hairline;
-  background: @row_hover;
+  background: mix(@theme_card, @theme_text, 0.04);
 }
 
 .market-detail-title {
   font-size: 1.3em;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .quant-row {
@@ -1449,18 +1194,18 @@ window.chat-window button.market-card:hover {
 }
 
 .quant-row.recommended {
-  border-color: @theme_accent;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.6);
 }
 
 .quant-name {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .readme-card {
   padding: 16px 20px;
-  border-radius: 10px;
-  background: mix(@theme_bg, @theme_surface, 0.5);
-  border: 1px solid @hairline;
+  border-radius: var(--nyx-radius-card);
+  border: none;
+  background: @theme_card;
 }
 
 /* ---------- Arena and stats ---------- */
@@ -1471,9 +1216,9 @@ window.chat-window button.market-card:hover {
 
 .arena-row > .assistant-msg {
   padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid @hairline;
-  background: transparent;
+  border-radius: var(--nyx-radius-card);
+  border: none;
+  background: @theme_card;
 }
 
 .arena-votes {
@@ -1481,7 +1226,7 @@ window.chat-window button.market-card:hover {
 }
 
 .board-rank {
-  font-weight: 800;
+  font-weight: 600;
   color: @theme_accent;
 }
 
@@ -1491,9 +1236,9 @@ window.chat-window button.market-card:hover {
 
 .stat-tile {
   padding: 12px 14px 10px;
-  border-radius: 10px;
-  background: transparent;
-  border: 1px solid @hairline;
+  border-radius: var(--nyx-radius-card);
+  border: none;
+  background: @theme_card;
 }
 
 /* ---------- Quick ask ---------- */
@@ -1505,9 +1250,9 @@ window.chat-window button.market-card:hover {
 
 .quick-context {
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--nyx-radius-card);
   background: alpha(@theme_accent, 0.08);
-  border: 1px solid alpha(@theme_accent, 0.35);
+  border: none;
 }
 
 /* Model load bar under the picker */
@@ -1541,7 +1286,7 @@ window.chat-window menubutton.tool-button > button {
   min-width: 30px;
   min-height: 30px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: var(--nyx-radius-small);
   border-color: transparent;
   background: transparent;
   color: @theme_dim_text;
@@ -1559,8 +1304,13 @@ window.chat-window menubutton.tool-button > button:checked {
   color: @theme_accent;
 }
 
-.chat-header .caps {
+.caps {
   margin-right: 6px;
+}
+
+.caps image.cap-icon {
+  color: @theme_dim_text;
+  -gtk-icon-size: 14px;
 }
 
 /* Context use in the message bar: as tall and quiet as the icons beside it. */
@@ -1568,7 +1318,7 @@ window.chat-window menubutton.tool-button > button:checked {
   min-height: 32px;
   padding: 0 8px;
   margin-left: 4px;
-  border-radius: 6px;
+  border-radius: var(--nyx-radius-small);
   color: @theme_dim_text;
   font-size: 0.82em;
   font-feature-settings: "tnum";
@@ -1586,7 +1336,7 @@ window.chat-window menubutton.tool-button > button:checked {
 window.chat-window menubutton.reasoning-level > button {
   min-height: 32px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: var(--nyx-radius-small);
   border-color: transparent;
   background: transparent;
   color: @theme_dim_text;
@@ -1609,11 +1359,11 @@ levelbar.ctx-bar > trough > block {
 /* Message bar toggles: icon-only, quiet until on */
 window.chat-window button.bar-toggle,
 window.chat-window menubutton.bar-menu > button {
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 34px;
+  min-height: 34px;
   padding: 0;
-  border-radius: 6px;
-  border-color: transparent;
+  border-radius: var(--nyx-radius-small);
+  border: none;
   background: transparent;
   color: @theme_dim_text;
 }
@@ -1635,5 +1385,17 @@ window.chat-window menubutton.bar-menu > button:checked {
 }
 
 window.chat-window .group-list > button.recent-row:only-child {
-  border-radius: 9px;
+  border-radius: var(--nyx-radius-card);
+}
+
+/* Numbers that line up. */
+.tnum {
+  font-feature-settings: "tnum";
+}
+
+/* Readouts and key figures: the UI font with tabular figures, not the shared mono. */
+window.chat-window label.value-readout,
+window.chat-window label.kv-value.mono {
+  font-family: inherit;
+  font-feature-settings: "tnum";
 }

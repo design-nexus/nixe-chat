@@ -119,7 +119,7 @@ pub fn build() -> gtk::Widget {
     controls.append(&hf_controls);
 
     let mem_note = widgets::label("", "dim");
-    mem_note.add_css_class("mono");
+    mem_note.add_css_class("tnum");
     mem_note.add_css_class("small-text");
     mem_note.set_wrap(true);
     let estimate_ctx = if crate::llama::api::local_service() { 8192 } else { pr.num_ctx };
@@ -171,14 +171,6 @@ thread_local! {
 
 thread_local! {
     static MARKET: RefCell<Option<Rc<Market>>> = const { RefCell::new(None) };
-}
-
-/// Show a Hugging Face repository's page.
-pub fn open_repo(repo: &str) {
-    crate::window::navigate("marketplace");
-    if let Some(m) = MARKET.with(|x| x.borrow().clone()) {
-        hf_detail(&m, hf::Model { id: repo.to_string(), ..Default::default() });
-    }
 }
 
 fn loading(b: &gtk::Box) {
@@ -477,7 +469,7 @@ fn draw_files(m: &Rc<Market>, b: &gtk::Box, repo: &str, d: &hf::Detail) {
         q.add_css_class("mono");
         q.set_width_chars(10);
         row.append(&q);
-        let s = widgets::label(&util::size(f.size), "mono");
+        let s = widgets::label(&util::size(f.size), "tnum");
         s.add_css_class("dim");
         s.set_width_chars(9);
         row.append(&s);
@@ -598,7 +590,7 @@ fn draw_tags(m: &Rc<Market>, b: &gtk::Box, model: &str, tags: &[library::Tag]) {
         q.set_width_chars(16);
         q.set_ellipsize(pango::EllipsizeMode::End);
         row.append(&q);
-        let s = widgets::label(&t.size, "mono");
+        let s = widgets::label(&t.size, "tnum");
         s.add_css_class("dim");
         s.set_width_chars(8);
         row.append(&s);

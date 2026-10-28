@@ -22,7 +22,7 @@ Chat uses a local llama.cpp service by default. The service keeps running when C
     later turns build on your version, or **branch** a new chat from any message.
   - Select text in a reply to **ask about it** or have it explained.
   - Click a reply's speed to see its time to first token, token counts, total time and
-    why it ended. The status bar shows the model and its speed, and the message bar
+    why it ended. The header shows the model and its speed, and the message bar
     shows how much of the context the chat uses.
   - When a chat outgrows its context, the oldest messages are left out (or the first
     exchange is kept, or the chat stops and says so), per chat or by default.
@@ -80,7 +80,7 @@ Chat uses a local llama.cpp service by default. The service keeps running when C
   [Piper](https://github.com/rhasspy/piper). Hands-free mode sends when you stop talking.
 - **Quick ask:** `nyx-chat --quick` opens a small window for one-off questions, optionally
   about the text you've highlighted or copied. **Open in chat** keeps the exchange.
-- **Several servers:** add llama.cpp or Ollama servers and switch between them from the status bar. Chat never starts or stops Ollama.
+- **Several servers:** add llama.cpp or Ollama servers and switch between them at the foot of the sidebar. Chat never starts or stops Ollama.
 - **Import and export:** all chats as one JSON file, and imports from Open WebUI exports.
 
 ### Easy on the battery

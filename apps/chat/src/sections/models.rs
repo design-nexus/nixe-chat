@@ -105,7 +105,7 @@ pub fn build() -> gtk::Widget {
                 let bar = widgets::usage_bar();
                 bar.set_value(p.fraction());
                 let desc = widgets::label(&pulls::describe(p), "settings-option-description");
-                desc.add_css_class("mono");
+                desc.add_css_class("tnum");
                 desc.set_ellipsize(pango::EllipsizeMode::End);
                 let card = widgets::vbox(6);
                 card.add_css_class("settings-option");
@@ -262,7 +262,7 @@ fn fill_installed(g: &widgets::Group, list: &gtk::Box) {
     let summary = format!("{} model{} · {}", installed.len(), if installed.len() == 1 { "" } else { "s" }, util::size(total));
     let head = widgets::hbox(8);
     let sl = widgets::label(&summary, "dim");
-    sl.add_css_class("mono");
+    sl.add_css_class("tnum");
     sl.set_hexpand(true);
     head.append(&sl);
     if !updates.is_empty() {

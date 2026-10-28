@@ -291,7 +291,7 @@ fn draw_board(b: &gtk::Box) {
         let row = widgets::hbox(12);
         row.add_css_class("settings-option");
         let rank = widgets::label(&format!("{}", i + 1), "board-rank");
-        rank.add_css_class("mono");
+        rank.add_css_class("tnum");
         rank.set_width_chars(3);
         row.append(&rank);
         let name = widgets::label(&model, "settings-option-title");
@@ -299,11 +299,11 @@ fn draw_board(b: &gtk::Box) {
         name.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
         row.append(&name);
         let rec = widgets::label(&format!("{w}–{l}–{t}"), "dim");
-        rec.add_css_class("mono");
+        rec.add_css_class("tnum");
         rec.set_tooltip_text(Some("Wins, losses, ties"));
         row.append(&rec);
         let r = widgets::label(&format!("{rating:.0}"), "value-readout");
-        r.add_css_class("mono");
+        r.add_css_class("tnum");
         r.set_xalign(1.0);
         row.append(&r);
         b.append(&row);

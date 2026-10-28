@@ -19,7 +19,7 @@ fn slider(min: f64, max: f64, step: f64, value: f64, digits: usize, on: impl Fn(
     s.set_hexpand(true);
     s.set_draw_value(false);
     let readout = widgets::label(&format!("{value:.digits$}"), "value-readout");
-    readout.add_css_class("mono");
+    readout.add_css_class("tnum");
     readout.set_xalign(1.0);
     readout.set_width_chars(5);
     let r2 = readout.clone();
@@ -46,10 +46,9 @@ pub(super) fn fill(p: &Rc<Page>) {
     let pr = prefs::get();
     let pa = chat.params.clone();
 
+    // No title: the header already names the chat.
     let head = widgets::hbox(8);
-    let t = widgets::label("Chat settings", "panel-title");
-    t.set_hexpand(true);
-    head.append(&t);
+    head.set_halign(gtk::Align::End);
     let reset = gtk::Button::with_label("Reset");
     reset.add_css_class("flat");
     reset.set_tooltip_text(Some("Use the defaults from Settings"));

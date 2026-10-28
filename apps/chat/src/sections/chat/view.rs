@@ -374,7 +374,7 @@ fn branch_nav(sibs: &[i64], current: i64, all: &[Message]) -> gtk::Widget {
     if pos > 0 {
         prev.connect_clicked(go(sibs[pos - 1], all.to_vec()));
     }
-    let l = widgets::label(&format!("{}/{}", pos + 1, sibs.len()), "mono");
+    let l = widgets::label(&format!("{}/{}", pos + 1, sibs.len()), "tnum");
     l.add_css_class("dim");
     l.add_css_class("small-text");
     let next = gtk::Button::from_icon_name("go-next-symbolic");
@@ -472,7 +472,7 @@ fn stats_button(text: &str, first: &Message, last: &Message, tokens: i64) -> gtk
         rows.push(("Ended", last_stats.reason().to_string()));
         for (i, (k, val)) in rows.iter().enumerate() {
             grid.attach(&widgets::label(k, "dim"), 0, i as i32, 1, 1);
-            let l = widgets::label(val, "mono");
+            let l = widgets::label(val, "tnum");
             l.set_xalign(1.0);
             grid.attach(&l, 1, i as i32, 1, 1);
         }
