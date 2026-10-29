@@ -445,14 +445,3 @@ pub fn empty(text: &str) -> gtk::Label {
     l.set_justify(gtk::Justification::Center);
     l
 }
-
-/// Colour swatches for the current palette (the This window group).
-pub fn swatch(color: &str) -> gtk::Box {
-    let s = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    s.add_css_class("swatch");
-    let provider = gtk::CssProvider::new();
-    provider.load_from_string(&format!("box {{ background: {color}; }}"));
-    #[allow(deprecated)]
-    s.style_context().add_provider(&provider, gtk::STYLE_PROVIDER_PRIORITY_USER);
-    s
-}

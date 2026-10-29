@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::prefs::{self, Backend, Host, McpServer};
 use crate::widgets::{self, Group, Page};
-use crate::{hf, hub, models, paths, store, theme, tools, transfer, util, voice, window};
+use crate::{hf, hub, models, paths, store, tools, transfer, util, voice, window};
 
 /// The choices for a chat that outgrows its context.
 pub const OVERFLOW: &[(&str, &str)] =
@@ -15,7 +15,6 @@ pub const OVERFLOW: &[(&str, &str)] =
 
 /// Fill `page` with every settings group; the settings card shows one at a time.
 pub fn build(page: &Page) {
-    this_window(page);
     connection(page);
     local_server_settings(page);
     hugging_face(page);
@@ -28,7 +27,6 @@ pub fn build(page: &Page) {
     voice_group(page);
     quick_ask(page);
     mcp(page);
-    keyboard(page);
     data(page);
 }
 
@@ -224,65 +222,6 @@ fn slider_row(
     b.append(&s);
     b.append(&r);
     g.add(&widgets::row(title, desc, Some(b.upcast_ref())));
-}
-
-// ---------- This window ----------
-
-fn this_window(page: &Page) {
-    let g = page.group("Chat window");
-    let p = prefs::get();
-    let options: Vec<(String, String)> = theme::all().iter().map(|t| (t.id.clone(), t.name.clone())).collect();
-    let (theme_row, theme_dd) = widgets::choice_row(
-        "Theme",
-        "Dracula, Catppuccin, Tokyo Night and more. Add your own in <tt>~/.config/nyx-chat/themes</tt>.",
-        options,
-        &p.theme,
-        |id| {
-            prefs::update(|p| {
-                p.theme = id;
-                p.mode = prefs::ThemeMode::Theme;
-            });
-            theme::apply();
-        },
-    );
-    theme_dd.set_sensitive(p.mode == prefs::ThemeMode::Theme || !theme::omarchy_available());
-    if theme::omarchy_available() {
-        let dd = theme_dd.clone();
-        let (r, _) = widgets::switch_row(
-            "Follow Omarchy theme",
-            "Match the desktop's colors and update live whenever the Omarchy theme changes.",
-            p.mode == prefs::ThemeMode::Omarchy,
-            move |on| {
-                prefs::update(|p| p.mode = if on { prefs::ThemeMode::Omarchy } else { prefs::ThemeMode::Theme });
-                dd.set_sensitive(!on);
-                theme::apply();
-            },
-        );
-        g.add(&r);
-    }
-    g.add(&theme_row);
-
-    let swatches = widgets::hbox(4);
-    let draw = {
-        let swatches = swatches.clone();
-        move || {
-            widgets::clear(&swatches);
-            let pal = theme::palette();
-            for c in [&pal.bg, &pal.surface, &pal.muted, &pal.text, &pal.accent, &pal.danger] {
-                swatches.append(&widgets::swatch(c));
-            }
-        }
-    };
-    draw();
-    hub::on(&hub::THEME, &swatches, draw);
-    g.add(&widgets::row("Current colors", "", Some(swatches.upcast_ref())));
-    g.add(&nyx_ui::widgets::accent_row("chat"));
-    let (r, _) =
-        widgets::switch_row("Reduce motion", "Turn off transitions and animations in this window.", p.reduce_motion, |on| {
-            prefs::update(|p| p.reduce_motion = on);
-            theme::apply();
-        });
-    g.add(&r);
 }
 
 // ---------- Connection ----------
@@ -1055,15 +994,6 @@ fn quick_ask(page: &Page) {
         "In this window, drag out an area to attach it. <tt>chat --screenshot</tt> does the same from a shortcut.",
         Some(shot.upcast_ref()),
     ));
-}
-
-// ---------- Keyboard ----------
-
-fn keyboard(page: &Page) {
-    let g = page.group("Keyboard");
-    for (keys, what) in window::SHORTCUTS {
-        g.add(&widgets::row(what, "", Some(widgets::keys(keys).upcast_ref())));
-    }
 }
 
 // ---------- MCP ----------
